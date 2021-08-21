@@ -1,5 +1,5 @@
 import tensorflow as tf
-from .data.label.bbox import NumpyBBoxes
+from solartf.data.bbox.type import BBoxesTensor
 from .util import tf_bbox_intersection
 
 
@@ -14,8 +14,8 @@ class IoUFamilyMetric:
         """
         inputs here are based on centroid coordinate
         """
-        y_true_corner = NumpyBBoxes(y_true, coord=self.coord, method='tensorflow').to_array(coord='corner')
-        y_pred_corner = NumpyBBoxes(y_pred, coord=self.coord, method='tensorflow').to_array(coord='corner')
+        y_true_corner = BBoxesTensor(y_true, coord=self.coord, method='tensorflow').to_array(coord='corner')
+        y_pred_corner = BBoxesTensor(y_pred, coord=self.coord, method='tensorflow').to_array(coord='corner')
 
         boxes1_area = (y_true_corner[..., 2] - y_true_corner[..., 0]) * (y_true_corner[..., 3] - y_true_corner[..., 1])
         boxes2_area = (y_pred_corner[..., 2] - y_pred_corner[..., 0]) * (y_pred_corner[..., 3] - y_pred_corner[..., 1])
