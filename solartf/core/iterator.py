@@ -1,4 +1,5 @@
 import os
+import json
 import numpy as np
 from typing import Tuple
 
@@ -37,3 +38,23 @@ class DirectoryIterator(BaseIterator):
                     continue
 
                 yield os.path.join(root, fname)
+
+
+class JSONIterator(DirectoryIterator):
+    def __init__(self,
+                 label_dir,
+                 shuffle=True):
+        super().__init__(label_dir, ('json',), shuffle)
+        self.label_dir = label_dir
+
+    def __next__(self):
+        self.item_index += 1
+        if self.item_index < self.item_count:
+            image_id = self.index_array[self.item_index]
+            file_path = self.file_path_list[image_id]
+            with open(file_path) as json_file:
+                annotation = json.load(json_file)
+
+            return annotation
+
+        raise StopIteration
