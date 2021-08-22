@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+from typing import List
 
 
 class BBoxesMixin:
@@ -58,6 +59,95 @@ class BBoxesMixin:
     @property
     def height_centers(self):
         return (self.bboxes[..., 3] + self.bboxes[..., 1]) / 2
+
+
+class BBox(object):
+    def __init__(self,
+                 class_id,
+                 bbox,
+                 visibility=None,
+                 blur_level=None,
+                 region_level=None,
+                 truncation=None):
+        """
+        :param class_id: ID of the corresponding class
+        :param bbox: (top, left, bottom, right)
+        :param visibility
+               0 indicates "visible"
+               1 indicates "partial-occlusion"
+               2 indicates "full-occlusion"
+        :param blur_level
+               0 indicates no-blur
+               1 indicates blur
+        :param region_level
+               When an object is detected, we are also interested on different part/region of the object
+               For example, we can split a person into head, visible region, and full region.
+        :param truncation indicates the degree of object parts appears outside a frame
+                no truncation = 0 (truncation ratio 0%),
+                partial truncation = 1 (truncation ratio 1% ~ 50%))
+        """
+        # todo: must be corrected from original json file
+        self.class_id = class_id
+        self.bbox = bbox
+        self.visibility = visibility
+        self.blur_level = blur_level
+        self.region_level = region_level
+        self.truncation = truncation
+
+    @property
+    def top(self):
+        return self.bbox[0]
+
+    @property
+    def left(self):
+        return self.bbox[1]
+
+    @property
+    def bottom(self):
+        return self.bbox[2]
+
+    @property
+    def right(self):
+        return self.bbox[3]
+
+    @property
+    def width(self):
+        return self.bbox[3] - self.bbox[1]
+
+    @property
+    def height(self):
+        return self.bbox[2] - self.bbox[0]
+
+
+class BBoxes:
+    def __init__(self, bboxes: List[BBox], bbox_exclude=None):
+        if bbox_exclude is None:
+            self.bbox_exclude = {'class_id': [-1]}
+        else:
+            self.bbox_exclude = bbox_exclude
+
+        self._bboxes = bboxes
+        self._labels = np.array([bbox.class_id
+                                 for key, value in self.bbox_exclude.items()
+                                 for bbox in bboxes
+                                 if bbox.__getattribute__(key) not in value])
+        if self._labels.size > 0:
+            bbox_tensor = np.stack([[bbox.left, bbox.top, bbox.right, bbox.bottom]
+                                    for bbox in bboxes
+                                    for key, value in self.bbox_exclude.items()
+                                    if bbox.__getattribute__(key) not in value], axis=0)
+        else:
+            bbox_tensor = np.empty(shape=(0, 4))
+
+        self.bboxes_tensor = BBoxesTensor(bboxes=bbox_tensor)
+
+    @property
+    def labels(self):
+        return self._labels
+
+    @property
+    def bboxes(self):
+        return self._bboxes
 
 
 class BBoxesTensor(BBoxesMixin):
