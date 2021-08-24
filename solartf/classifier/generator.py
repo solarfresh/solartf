@@ -1,7 +1,7 @@
 import os
 import numpy as np
 from solartf.core.generator import KerasGeneratorBase
-from solartf.data.image.type import ImageInput
+from solartf.data.image.processor import ImageInput
 
 
 class ClassifierDirectoryGenerator(KerasGeneratorBase):

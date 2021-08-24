@@ -1,14 +1,19 @@
 import cv2
 import numpy as np
-from .type import ImageInput
+from typing import Tuple
 
 
 class ImageProcessor:
+    image_array: np.array
+    image_shape: Tuple
+    scale: Tuple
 
-    @staticmethod
-    def affine(image: np.array, origin_pts=None, horizontal=None, vertical=None):
+    def affine(self, origin_pts=None, horizontal=None, vertical=None):
 
-        height, width, depth = image.shape
+        if len(self.image_shape) == 3:
+            height, width, depth = self.image_shape
+        else:
+            raise ValueError(f'The length of {self.image_shape} is not equal to 3...')
 
         if origin_pts is None:
             origin_pts = tuple([np.random.randint(0, width), np.random.randint(0, height)] for _ in range(3))
@@ -43,19 +48,20 @@ class ImageProcessor:
             target_pts += ([_x, _y],)
 
         M = cv2.getAffineTransform(np.float32(origin_pts), np.float32(target_pts))
-        return cv2.warpAffine(image, M, (width, height))
+        self.image_array = cv2.warpAffine(self.image_array.copy(), M, (width, height))
+        return self
 
-    @staticmethod
-    def brightness(image: np.array, ratio=None, image_type='rgb'):
+    def brightness(self, ratio=None, image_type='rgb'):
+        if ratio is None:
+            return self
+
+        image_array = self.image_array.copy()
         if image_type == 'rgb':
-            hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+            hsv = cv2.cvtColor(image_array, cv2.COLOR_RGB2HSV)
         elif image_type == 'bgr':
-            hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+            hsv = cv2.cvtColor(image_array, cv2.COLOR_BGR2HSV)
         else:
             raise ValueError(f'{image_type} is not implemented...')
-
-        if ratio is None:
-            ratio = (.5, 2.)
 
         if isinstance(ratio, tuple) or isinstance(ratio, list):
             factor = np.random.uniform(ratio[0], ratio[1])
@@ -67,13 +73,20 @@ class ImageProcessor:
         hsv[..., 2] = v_channel
 
         if image_type == 'rgb':
-            return cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)
+            self.image_array = cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)
 
         if image_type == 'bgr':
-            return cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+            self.image_array = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+
+        return self
+
+    def crop(self, xmin: int, ymin: int, xmax: int, ymax: int):
+        image_array = self.image_array.copy()
+        self.image_array = image_array[ymin:ymax, xmin:xmax]
+        self.image_shape = self.image_array.shape
+        return self
 
     def equalizer(self,
-                  image: np.array,
                   method='hist',
                   image_type='rgb',
                   clip_limit=None,
@@ -82,12 +95,13 @@ class ImageProcessor:
         if method not in ['hist', 'clahe']:
             raise ValueError(f'{method} is not implemented...')
 
-        image_copied = np.copy(image)
+        image_copied = np.copy(self.image_array)
         if method == 'hist':
-            return self._hist_equalizer(image_copied, image_type=image_type)
+            self.image_array = self._hist_equalizer(image_copied, image_type=image_type)
+            return self
         if method == 'clahe':
             if clip_limit is None:
-                clip_limit = (1. , 2.)
+                clip_limit = (1., 2.)
 
             if tile_grid_size_width is None:
                 tile_grid_size_width = (6, 10)
@@ -110,60 +124,68 @@ class ImageProcessor:
             else:
                 height_size = tile_grid_size_height
 
-            return self._clahe(image_copied, clip_limit=clip_factor, tile_grid_size=(height_size, width_size))
+            self.image_array = self._clahe(image_copied,
+                                           clip_limit=clip_factor,
+                                           tile_grid_size=(height_size, width_size))
+            return self
 
-    @staticmethod
-    def flip(image: np.array, orientation=None):
+    def flip(self, orientation=None):
         """
         :param orientation: horizontal, vertical, random, horizontal_random, vertical_random
         """
+        image_array = self.image_array.copy()
+
         if orientation == 'vertical':
-            return cv2.flip(image, 0), orientation
+            self.image_array = cv2.flip(image_array, 0)
 
         if orientation == 'horizontal':
-            return cv2.flip(image, 1), orientation
+            self.image_array = cv2.flip(image_array, 1)
 
         if orientation == 'horizontal_random':
             if np.random.randint(0, 2):
-                return cv2.flip(image, 1), 'horizontal'
-            else:
-                return image, None
+                self.image_array = cv2.flip(image_array, 1)
 
         if orientation == 'vertical_random':
             if np.random.randint(0, 2):
-                return cv2.flip(image, 0), 'vertical'
-            else:
-                return image, None
+                self.image_array = cv2.flip(image_array, 0)
 
-        return image, None
+        return self
 
-    @staticmethod
-    def resize_image(image: np.array, size, keep_aspect_ratio=False):
-        h, w = image.shape[:2]
+    def resize(self, size, keep_aspect_ratio=False):
+        image_array = self.image_array.copy()
+        h, w = image_array.shape[:2]
 
         if not keep_aspect_ratio:
-            resized_frame = cv2.resize(image, size)
-            scale = (size[0] / w, size[1] / h)
+            self.image_array = cv2.resize(image_array, size)
+            self.scale = (size[0] / w, size[1] / h)
         else:
             scale = min(size[1] / h, size[0] / w)
-            resized_frame = cv2.resize(image, None, fx=scale, fy=scale)
-            scale = (scale, scale)
-        return resized_frame, scale
+            self.image_array = cv2.resize(image_array, None, fx=scale, fy=scale)
+            self.scale = (scale, scale)
 
-    @staticmethod
-    def rotate(image: np.array, degree=None):
-        height, width, depth = image.shape
+        self.image_shape = self.image_array.shape
+        return self
+
+    def rotate(self, degree=None):
+        if len(self.image_shape) == 3:
+            height, width, depth = self.image_shape
+        else:
+            raise ValueError(f'The length of {self.image_shape} is not equal to 3...')
+
         if isinstance(degree, tuple) or isinstance(degree, list):
             factor = np.random.uniform(degree[0], degree[1])
         else:
             factor = degree
 
         M = cv2.getRotationMatrix2D((width / 2, height / 2), factor, 1)
-        return cv2.warpAffine(image, M, (width, height)), M
+        self.image_array = cv2.warpAffine(self.image_array.copy(), M, (width, height))
+        return self
 
-    @staticmethod
-    def scale(image: np.array, ratio=None):
-        height, width, depth = image.shape
+    def rescale(self, ratio=None):
+        if len(self.image_shape) == 3:
+            height, width, depth = self.image_shape
+        else:
+            raise ValueError(f'The length of {self.image_shape} is not equal to 3...')
 
         if isinstance(ratio, tuple) or isinstance(ratio, list):
             factor = np.random.uniform(ratio[0], ratio[1])
@@ -171,12 +193,14 @@ class ImageProcessor:
             factor = ratio
 
         M = cv2.getRotationMatrix2D((width / 2, height / 2), 0, factor)
-        # M will be adopted when processing bboxes
-        return cv2.warpAffine(image, M, (width, height)), M
+        self.image_array = cv2.warpAffine(self.image_array.copy(), M, (width, height))
+        return self
 
-    @staticmethod
-    def translate(image: np.array, horizontal=None, vertical=None):
-        height, width, depth = image.shape
+    def translate(self, horizontal=None, vertical=None):
+        if len(self.image_shape) == 3:
+            height, width, depth = self.image_shape
+        else:
+            raise ValueError(f'The length of {self.image_shape} is not equal to 3...')
 
         if isinstance(horizontal, tuple) or isinstance(horizontal, list):
             dw = np.random.randint(horizontal[0], horizontal[1]+1)
@@ -195,9 +219,8 @@ class ImageProcessor:
         # create the transformation matrix
         M = np.float32([[1, 0, dw], [0, 1, dh]])
 
-        # todo: there will be the empty black space, and we can crop that
-
-        return cv2.warpAffine(image, M, (width, height)), M
+        self.image_array = cv2.warpAffine(self.image_array.copy(), M, (width, height))
+        return self
 
     @staticmethod
     def _hist_equalizer(image: np.array, image_type='rgb'):
@@ -231,6 +254,71 @@ class ImageProcessor:
             return image
 
 
+class ImageInput(ImageProcessor):
+    def __init__(self,
+                 image_id,
+                 image_path,
+                 image_type='rgb',
+                 image_shape=None,
+                 mode=None):
+        self.image_id = image_id
+        self.image_path = image_path
+        self.image_type = image_type.lower()
+        self.image_shape = image_shape
+        self.scale = (1, 1)
+
+        # The shape of image_array returns (height, width, depth)
+        if mode is not None:
+            self.image_array = cv2.imread(self.image_path, mode)
+        else:
+            self.image_array = cv2.imread(self.image_path)
+
+        if self.image_type == 'rgb':
+            self.image_array = cv2.cvtColor(self.image_array, cv2.COLOR_BGR2RGB)
+
+        if self.image_type == 'gray':
+            self.image_array = cv2.cvtColor(self.image_array, cv2.COLOR_BGR2GRAY)
+
+        if self.image_type == 'hsv':
+            self.image_array = cv2.cvtColor(self.image_array, cv2.COLOR_BGR2HSV)
+
+        if self.image_shape is not None:
+            self.scale = tuple(self.image_array.shape[index] / image_shape[index] for index in range(2))
+            self.image_array = cv2.resize(self.image_array, self.image_shape[:2])
+
+    def convert(self, image_type):
+        if self.image_type == 'bgr':
+            if image_type == 'bgr':
+                return self.image_array
+            elif image_type == 'rgb':
+                return cv2.cvtColor(self.image_array, cv2.COLOR_BGR2RGB)
+            elif image_type == 'gray':
+                return cv2.cvtColor(self.image_array, cv2.COLOR_BGR2GRAY)
+            elif image_type == 'hsv':
+                return cv2.cvtColor(self.image_array, cv2.COLOR_BGR2HSV)
+        elif self.image_type == 'rgb':
+            if image_type == 'bgr':
+                return cv2.cvtColor(self.image_array, cv2.COLOR_RGB2BGR)
+            elif image_type == 'rgb':
+                return self.image_array
+            elif image_type == 'gray':
+                return cv2.cvtColor(self.image_array, cv2.COLOR_RGB2GRAY)
+            elif image_type == 'hsv':
+                return cv2.cvtColor(self.image_array, cv2.COLOR_RGB2HSV)
+        elif self.image_type == 'hsv':
+            if image_type == 'bgr':
+                return cv2.cvtColor(self.image_array, cv2.COLOR_HSV2BGR)
+            elif image_type == 'rgb':
+                return cv2.cvtColor(self.image_array, cv2.COLOR_HSV2RGB)
+            elif image_type == 'gray':
+                image_array = cv2.cvtColor(self.image_array, cv2.COLOR_HSV2BGR)
+                return cv2.cvtColor(image_array, cv2.COLOR_BGR2GRAY)
+            elif image_type == 'hsv':
+                return self.image_array
+        else:
+            raise ValueError(f'The type {image_type} can be converted from {self.image_type}')
+
+
 class ImageAugmentation:
     def __init__(self,
                  brightness_ratio=None,
@@ -245,26 +333,22 @@ class ImageAugmentation:
         self.degree = degree
         self.h_shift = h_shift
         self.v_shift = v_shift
-        self.image_processor = ImageProcessor()
 
     def execute(self, image_input: ImageInput):
-        image_array = image_input.image_array
         image_type = image_input.image_type
 
         if self.brightness_ratio is not None:
-            image_array = self.image_processor.brightness(image_array,
-                                                          ratio=self.brightness_ratio,
-                                                          image_type=image_type)
+            image_input.brightness(ratio=self.brightness_ratio,
+                                   image_type=image_type)
+
         if self.flip_orientation is not None:
-            image_array, orientation = self.image_processor.flip(image_array, orientation=self.flip_orientation)
+            image_input.flip(orientation=self.flip_orientation)
 
         if self.scale_ratio is not None:
-            image_array, M = self.image_processor.scale(image_array, ratio=self.scale_ratio)
+            image_input.rescale(ratio=self.scale_ratio)
 
         if self.degree is not None:
-            image_array, M = self.image_processor.rotate(image_array, degree=self.degree)
+            image_input.rotate(degree=self.degree)
 
         if self.h_shift is not None or self.v_shift is not None:
-            image_array, M = self.image_processor.translate(image_array, horizontal=self.h_shift, vertical=self.v_shift)
-
-        image_input.image_array = image_array
+            image_input.translate(horizontal=self.h_shift, vertical=self.v_shift)
