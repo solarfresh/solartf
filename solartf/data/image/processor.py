@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-from typing import Tuple
+from typing import (List, Tuple)
 
 
 class ImageProcessor:
@@ -144,12 +144,14 @@ class ImageProcessor:
         if orientation == 'horizontal_random':
             if np.random.randint(0, 2):
                 self.image_array = cv2.flip(image_array, 1)
+                orientation = 'horizontal'
 
         if orientation == 'vertical_random':
             if np.random.randint(0, 2):
                 self.image_array = cv2.flip(image_array, 0)
+                orientation = 'vertical'
 
-        return self
+        return orientation
 
     def resize(self, size, keep_aspect_ratio=False):
         image_array = self.image_array.copy()
@@ -179,7 +181,7 @@ class ImageProcessor:
 
         M = cv2.getRotationMatrix2D((width / 2, height / 2), factor, 1)
         self.image_array = cv2.warpAffine(self.image_array.copy(), M, (width, height))
-        return self
+        return M
 
     def rescale(self, ratio=None):
         if len(self.image_shape) == 3:
@@ -194,7 +196,7 @@ class ImageProcessor:
 
         M = cv2.getRotationMatrix2D((width / 2, height / 2), 0, factor)
         self.image_array = cv2.warpAffine(self.image_array.copy(), M, (width, height))
-        return self
+        return M
 
     def translate(self, horizontal=None, vertical=None):
         if len(self.image_shape) == 3:
@@ -220,7 +222,7 @@ class ImageProcessor:
         M = np.float32([[1, 0, dw], [0, 1, dh]])
 
         self.image_array = cv2.warpAffine(self.image_array.copy(), M, (width, height))
-        return self
+        return M
 
     @staticmethod
     def _hist_equalizer(image: np.array, image_type='rgb'):
@@ -256,12 +258,10 @@ class ImageProcessor:
 
 class ImageInput(ImageProcessor):
     def __init__(self,
-                 image_id,
                  image_path,
                  image_type='rgb',
                  image_shape=None,
                  mode=None):
-        self.image_id = image_id
         self.image_path = image_path
         self.image_type = image_type.lower()
         self.image_shape = image_shape
@@ -334,21 +334,22 @@ class ImageAugmentation:
         self.h_shift = h_shift
         self.v_shift = v_shift
 
-    def execute(self, image_input: ImageInput):
-        image_type = image_input.image_type
+    def execute(self, image_input_list: List[ImageInput]):
+        for image_input in image_input_list:
+            image_type = image_input.image_type
 
-        if self.brightness_ratio is not None:
-            image_input.brightness(ratio=self.brightness_ratio,
-                                   image_type=image_type)
+            if self.brightness_ratio is not None:
+                image_input.brightness(ratio=self.brightness_ratio,
+                                       image_type=image_type)
 
-        if self.flip_orientation is not None:
-            image_input.flip(orientation=self.flip_orientation)
+            if self.flip_orientation is not None:
+                image_input.flip(orientation=self.flip_orientation)
 
-        if self.scale_ratio is not None:
-            image_input.rescale(ratio=self.scale_ratio)
+            if self.scale_ratio is not None:
+                image_input.rescale(ratio=self.scale_ratio)
 
-        if self.degree is not None:
-            image_input.rotate(degree=self.degree)
+            if self.degree is not None:
+                image_input.rotate(degree=self.degree)
 
-        if self.h_shift is not None or self.v_shift is not None:
-            image_input.translate(horizontal=self.h_shift, vertical=self.v_shift)
+            if self.h_shift is not None or self.v_shift is not None:
+                image_input.translate(horizontal=self.h_shift, vertical=self.v_shift)

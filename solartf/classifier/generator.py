@@ -55,23 +55,26 @@ class ClassifierDirectoryGenerator(KerasGeneratorBase):
         return self._data_generation(indexes)
 
     def _data_generation(self, indexes):
+        image_input_list = []
+        for index in indexes:
+            input_image_path = self.image_path_list[index]
+
+            image_input = ImageInput(input_image_path,
+                                     image_type=self.image_type,
+                                     image_shape=self.image_shape)
+            image_input_list.append(image_input)
+
+        for augment in self.augment:
+            augment.execute(image_input_list)
+
         if self.dataset_type == 'test':
             batch_image_input = []
         else:
             batch_image_input = np.zeros((self.batch_size,) + self.image_shape)
+
         batch_label_output = np.zeros((self.batch_size, self.n_classes))
-        # todo: we can apply multiple process or batch process here
-        for idx, index in enumerate(indexes):
-            input_image_path = self.image_path_list[index]
-
-            image_input = ImageInput(index,
-                                     input_image_path,
-                                     image_type=self.image_type,
-                                     image_shape=self.image_shape)
-            for augment in self.augment:
-                augment.execute(image_input)
-
-            label = os.path.basename(os.path.dirname(input_image_path))
+        for idx, image_input in enumerate(image_input_list):
+            label = os.path.basename(os.path.dirname(image_input.image_path))
             label_index = self.class_map_invert[label]
 
             if self.dataset_type == 'test':

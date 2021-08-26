@@ -28,8 +28,7 @@ class ImageDirectoryGenerator(KerasGeneratorBase):
 
     def __getitem__(self, index):
         input_image_path = self.image_path_list[index]
-        image_input = ImageInput(index,
-                                 input_image_path,
+        image_input = ImageInput(input_image_path,
                                  image_type=self.image_type,
                                  image_shape=self.image_shape)
         return image_input
