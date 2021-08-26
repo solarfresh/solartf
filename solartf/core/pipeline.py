@@ -5,6 +5,27 @@ class TFPipelineBase:
         self.dataset = {}
         self.history = None
 
+        self.image_dir = {
+            'train': self.config.TRAIN_IMAGE_PATH,
+            'valid': self.config.VALID_IMAGE_PATH,
+            'test': self.config.TEST_IMAGE_PATH
+        }
+        self.shuffle = {
+            'train': self.config.TRAIN_SHUFFLE,
+            'valid': self.config.VALID_SHUFFLE,
+            'test': self.config.TEST_SHUFFLE
+        }
+        self.batch_size = {
+            'train': self.config.TRAIN_BATCH_SIZE,
+            'valid': self.config.VALID_BATCH_SIZE,
+            'test': self.config.TEST_BATCH_SIZE
+        }
+        self.augment = {
+            'train': self.config.TRAIN_AUGMENT,
+            'valid': self.config.VALID_AUGMENT,
+            'test': None
+        }
+
     def inference(self):
         raise NotImplementedError
 
@@ -32,7 +53,20 @@ class TFPipelineBase:
         raise NotImplementedError
 
     def load_model(self):
-        raise NotImplementedError
+        self.model = self.config.MODEL
+        self.model.build_model()
+
+        if self.config.MODEL_WEIGHT_PATH is not None:
+            self.model.load_weights(self.config.MODEL_WEIGHT_PATH,
+                                    skip_mismatch=True,
+                                    by_name=True)
+
+        self.model.compile(optimizer=self.config.TRAIN_OPTIMIZER,
+                           loss=self.config.TRAIN_LOSS,
+                           metrics=self.config.TRAIN_METRIC,
+                           loss_weights=self.config.TRAIN_LOSS_WEIGHTS)
+
+        return self
 
     def save_model(self):
         train_config = self.config.train

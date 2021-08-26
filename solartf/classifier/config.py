@@ -52,7 +52,8 @@ class LeNet5Config:
 
     TEST_BATCH_SIZE = 1
 
-    MODEL = TFLeNet5
+    MODEL = TFLeNet5(input_shape=IMAGE_SHAPE,
+                     n_classes=CLASS_NUMBER)
     MODEL_WEIGHT_PATH = None
     MODEL_CUSTOM_OBJECTS = None
     TRAIN_LOSS_WEIGHTS = None
