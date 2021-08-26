@@ -11,6 +11,7 @@ class DetectionInput:
         if bbox_exclude is None:
             self.bbox_exclude = {}
 
+        # todo: image_id must be contained by ImageInput
         self.image_id = image_id
         self.image = image
         self.bboxes = BBoxes(bboxes, bbox_exclude=bbox_exclude)
