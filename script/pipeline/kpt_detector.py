@@ -1,5 +1,6 @@
 import cv2
 import os
+import pandas as pd
 import tensorflow as tf
 from tensorflow.keras import (losses, optimizers)
 from tensorflow.keras.callbacks import ModelCheckpoint
@@ -15,11 +16,12 @@ class Config(ResNetV2Config):
 
     # train or freeze or show or partial_freeze or inference
     STATUS = 'inference'
-    MODEL_WEIGHT_PATH = '/Users/huangshangyu/Downloads/model/kptdetector/' \
-                        'kptdetector-00060_loss-0.4823_val_loss-0.4841_cls_output_loss-0.0236_val_cls_output_loss-0.0258_kpt_output_loss-0.0197_val_kpt_output_loss-0.0207.h5'
-    # MODEL_WEIGHT_PATH = None
+    # MODEL_WEIGHT_PATH = '/Users/huangshangyu/Downloads/model/kptdetector/' \
+    #                     'kptdetector-00050_loss-0.1764_val_loss-0.1798_cls_output_loss-0.0017_val_cls_output_loss-0.0042_kpt_output_loss-0.0206_val_kpt_output_loss-0.0233.h5'
+    MODEL_WEIGHT_PATH = None
+    SAVE_CSV_PATH = os.path.join('/Users/huangshangyu/Downloads/model/kptdetector', 'results.csv')
     TRAIN_INITIAL_EPOCH = 0
-    TRAIN_EPOCH = 200
+    TRAIN_EPOCH = 500
 
     MODEL_FREEZE_DIR = '/Users/huangshangyu/Downloads/model'
     MODEL_FREEZE_NAME = 'kptdetector.pb'
@@ -38,7 +40,7 @@ class Config(ResNetV2Config):
 
     TRAIN_LOSS = {'cls': losses.binary_crossentropy,
                   'kpt': smooth_L1_loss}
-    TRAIN_LOSS_WEIGHTS = [1., 1.]
+    TRAIN_LOSS_WEIGHTS = [1., 10.]
 
     TRAIN_BATCH_SIZE = 32
     TRAIN_STEP_PER_EPOCH = 10
@@ -88,6 +90,7 @@ if __name__ == '__main__':
 
     if config.STATUS == 'inference':
         results, image_arrays = trainer.inference()
+        pd.DataFrame(results).to_csv(config.SAVE_CSV_PATH)
         for result, image_array in zip(results, image_arrays):
             for idx in range(config.CLASS_NUMBER):
                 kpt = (result[f'cls_{idx}_kptx_pred'], result[f'cls_{idx}_kpty_pred'])

@@ -71,11 +71,11 @@ class KeypointDirectoryGenerator(KerasGeneratorBase):
             else:
                 image_input_list.append(copy.deepcopy(self.image_input_list[index]))
 
+        for image_input, kpt_input in zip(image_input_list, kpt_input_list):
+            kpt_input.resize(scale=image_input.scale)
+
         for augment in self.augment:
             augment.execute(image_input_list, kpt_input_list)
-        else:
-            for image_input, kpt_input in zip(image_input_list, kpt_input_list):
-                kpt_input.resize(scale=image_input.scale)
 
         if self.dataset_type == 'test':
             return image_input_list, kpt_input_list
