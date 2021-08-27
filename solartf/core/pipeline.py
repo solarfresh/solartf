@@ -10,6 +10,11 @@ class TFPipelineBase:
             'valid': self.config.VALID_IMAGE_PATH,
             'test': self.config.TEST_IMAGE_PATH
         }
+        self.label_dir = {
+            'train': self.config.TRAIN_LABEL_PATH,
+            'valid': self.config.VALID_LABEL_PATH,
+            'test': self.config.TEST_LABEL_PATH
+        }
         self.shuffle = {
             'train': self.config.TRAIN_SHUFFLE,
             'valid': self.config.VALID_SHUFFLE,

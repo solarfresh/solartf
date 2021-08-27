@@ -67,7 +67,14 @@ class KeypointInput(KeypointProcessor):
     def __init__(self, keypoints: List[Keypoint]):
         self._keypoints = np.array(keypoints)
         self.indexes = np.arange(len(self._keypoints))
-        self.labels = np.array([kp.class_id for kp in keypoints])
+        self.n_class = 0
+        if self.indexes.size > 0:
+            self.n_class = len(keypoints[0].class_map)
+
+        self.labels = np.zeros(shape=(self.n_class,))
+        for kpts in keypoints:
+            self.labels[kpts.class_id] = kpts.visible
+
         self.points_tensor = np.array([[kp.point.x, kp.point.y] for kp in keypoints])
 
     @property

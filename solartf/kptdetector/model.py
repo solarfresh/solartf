@@ -1,3 +1,4 @@
+import numpy as np
 from tensorflow.keras.layers import (Concatenate, Dense, Dropout, GlobalAveragePooling2D, Input, Reshape)
 from tensorflow.keras.losses import (binary_crossentropy, mse)
 from tensorflow.keras.models import Model
@@ -24,7 +25,18 @@ class TFResNet(TFModelBase):
         self.dropout = Dropout(rate=dropout_rate)
 
     def data_preprocess(self, inputs, training=True):
-        return inputs
+        image_input_list= inputs['image_input_list']
+        kpt_input_list = inputs['kpt_input_list']
+
+        batch_image_input = np.stack([image_input.image_array
+                                      for image_input in image_input_list], axis=0)
+        batch_cls_output = np.stack([kpt_input.labels for kpt_input in kpt_input_list], axis=0)
+        batch_kpt_output = np.stack([kpt_input.points_tensor for kpt_input in kpt_input_list], axis=0)
+        height, width, _ = self.input_shape
+        batch_kpt_output[..., 0] = batch_kpt_output[..., 0] / width
+        batch_kpt_output[..., 1] = batch_kpt_output[..., 1] / height
+
+        return batch_image_input, {'cls': batch_cls_output, 'kpt': batch_kpt_output}
 
     def data_postprocess(self, outputs, meta):
         return outputs
@@ -36,11 +48,11 @@ class TFResNet(TFModelBase):
         x = backbone.layers[-1].output
         x = self.dropout(x)
         x = GlobalAveragePooling2D()(x)
-        cls = Dense(units=self.n_classes, activation='sigmoid')(x)
+        cls = Dense(units=self.n_classes, activation='sigmoid', name='cls_output')(x)
         kpt_x = Dense(units=self.n_classes, activation='sigmoid')(x)
         kpt_y = Dense(units=self.n_classes, activation='sigmoid')(x)
         kpt = Concatenate(axis=-1)([kpt_x, kpt_y])
-        kpt = Reshape(target_shape=(-1, 2))(kpt)
+        kpt = Reshape(target_shape=(-1, 2), name='kpt_output')(kpt)
 
         predictions = {'cls': cls, 'kpt': kpt}
         self.model = Model(image_input, predictions)

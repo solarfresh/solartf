@@ -19,6 +19,11 @@ class LabelReader:
             if self.image_prop.__getattribute__(key):
                 self.image_prop.__setattr__(key, value)
 
+        self.class_map = None
+        if 'metadata' in self.annotation:
+            if 'class-map' in self.annotation['metadata']:
+                self.class_map = self.annotation['metadata']['class-map']
+
         if 'keypoints' in self.annotation['annotations']:
             self.keypoints = self._get_keypoints()
         else:
@@ -26,4 +31,7 @@ class LabelReader:
 
     def _get_keypoints(self):
         keypoints = self.annotation['annotations']['keypoints']
-        return [Keypoint(class_id=kpt['class_id'], x=kpt['x'], y=kpt['y']) for kpt in keypoints]
+        return [Keypoint(class_id=kpt['class_id'],
+                         x=kpt['x'],
+                         y=kpt['y'],
+                         class_map=self.class_map) for kpt in keypoints]
