@@ -49,8 +49,8 @@ class TFResNet(TFModelBase):
         x = self.dropout(x)
         x = GlobalAveragePooling2D()(x)
         cls = Dense(units=self.n_classes, activation='sigmoid', name='cls_output')(x)
-        kpt_x = Dense(units=self.n_classes, activation='sigmoid')(x)
-        kpt_y = Dense(units=self.n_classes, activation='sigmoid')(x)
+        kpt_x = Dense(units=self.n_classes)(x)
+        kpt_y = Dense(units=self.n_classes)(x)
         kpt = Concatenate(axis=-1)([kpt_x, kpt_y])
         kpt = Reshape(target_shape=(-1, 2), name='kpt_output')(kpt)
 

@@ -27,11 +27,12 @@ class KeypointDetectPipeline(TFPipelineBase):
                                                                            batch_kpt_gts,
                                                                            cls_outputs,
                                                                            kpt_outputs):
-                image_array_list.append(image_input.resize(output_shape[:2]))
+                image_array_list.append(image_input.resize(output_shape[:2]).image_array)
 
                 result = {
                     'fname': os.path.basename(image_input.image_path),
                 }
+
                 kpt_gt[..., 0] = kpt_gt[..., 0] * output_shape[1]
                 kpt_gt[..., 1] = kpt_gt[..., 1] * output_shape[0]
                 kpt_output[..., 0] = kpt_output[..., 0] * output_shape[1]
