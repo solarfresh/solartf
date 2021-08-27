@@ -7,12 +7,11 @@ from .generator import KeypointDirectoryGenerator
 class KeypointDetectPipeline(TFPipelineBase):
     def inference(self, output_shape=None, dataset_type='test'):
         if output_shape is None:
-            output_shape = (300, 300, 3)
+            output_shape = self.model.input_shape
 
         self.load_model().load_dataset()
 
         result_list = []
-        image_array_list = []
         for image_input_list, kpt_input_list in self.dataset[dataset_type]:
             image_arrays, batch_gts = self.model.data_preprocess({'image_input_list': image_input_list,
                                                                   'kpt_input_list': kpt_input_list})
@@ -27,10 +26,11 @@ class KeypointDetectPipeline(TFPipelineBase):
                                                                            batch_kpt_gts,
                                                                            cls_outputs,
                                                                            kpt_outputs):
-                image_array_list.append(image_input.resize(output_shape[:2]).image_array)
 
                 result = {
                     'fname': os.path.basename(image_input.image_path),
+                    'width': output_shape[1],
+                    'height': output_shape[0]
                 }
 
                 kpt_gt[..., 0] = kpt_gt[..., 0] * output_shape[1]
@@ -50,7 +50,7 @@ class KeypointDetectPipeline(TFPipelineBase):
 
                 result_list.append(result)
 
-        return result_list, image_array_list
+        return result_list
 
     def load_dataset(self):
         self.dataset = {}

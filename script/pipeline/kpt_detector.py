@@ -15,13 +15,13 @@ from solartf.core.loss import smooth_L1_loss
 class Config(ResNetV2Config):
 
     # train or freeze or show or partial_freeze or inference
-    STATUS = 'inference'
+    STATUS = 'train'
     # MODEL_WEIGHT_PATH = '/Users/huangshangyu/Downloads/model/kptdetector/' \
-    #                     'kptdetector-00050_loss-0.1764_val_loss-0.1798_cls_output_loss-0.0017_val_cls_output_loss-0.0042_kpt_output_loss-0.0206_val_kpt_output_loss-0.0233.h5'
+    #                     'kptdetector-00500_loss-0.0807_val_loss-0.0901_cls_output_loss-0.0000_val_cls_output_loss-0.0000_kpt_output_loss-0.0057_val_kpt_output_loss-0.0151.h5'
     MODEL_WEIGHT_PATH = None
     SAVE_CSV_PATH = os.path.join('/Users/huangshangyu/Downloads/model/kptdetector', 'results.csv')
     TRAIN_INITIAL_EPOCH = 0
-    TRAIN_EPOCH = 500
+    TRAIN_EPOCH = TRAIN_INITIAL_EPOCH + 500
 
     MODEL_FREEZE_DIR = '/Users/huangshangyu/Downloads/model'
     MODEL_FREEZE_NAME = 'kptdetector.pb'
@@ -40,10 +40,10 @@ class Config(ResNetV2Config):
 
     TRAIN_LOSS = {'cls': losses.binary_crossentropy,
                   'kpt': smooth_L1_loss}
-    TRAIN_LOSS_WEIGHTS = [1., 10.]
+    TRAIN_LOSS_WEIGHTS = [1., 1.]
 
     TRAIN_BATCH_SIZE = 32
-    TRAIN_STEP_PER_EPOCH = 10
+    TRAIN_STEP_PER_EPOCH = 50
     TRAIN_AUGMENT = [KeypointAugmentation(brightness_ratio=(.5, 2.),
                                           flip_orientation='horizontal_random',
                                           scale_ratio=(.8, 1.2),
@@ -60,16 +60,16 @@ class Config(ResNetV2Config):
                                           h_shift=(-10, 10),
                                           v_shift=(-10, 10))]
 
-    TRAIN_OPTIMIZER = optimizers.Adam(learning_rate=1e-3, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=5e-04)
-
     IMAGE_SHAPE = (64, 64, 3)
     CLASS_NUMBER = 4
     MODEL = TFResNet(input_shape=IMAGE_SHAPE,
                      n_classes=CLASS_NUMBER,
                      num_res_blocks=3,
+                     num_stage=5,
                      num_filters_in=16,
                      dropout_rate=.3)
 
+    TRAIN_OPTIMIZER = optimizers.Adam(learning_rate=1e-3, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=5e-04)
     TRAIN_MODEL_CHECKPOINT_PATH = '/Users/huangshangyu/Downloads/model/kptdetector/kptdetector-{epoch:05d}' \
                                   + ''.join([f'_{key}-{{{key}:.4f}}_val_{key}-{{val_{key}:.4f}}'
                                              for key in ['loss', 'cls_output_loss', 'kpt_output_loss']]) + '.h5'
@@ -89,11 +89,19 @@ if __name__ == '__main__':
     trainer = KeypointDetectPipeline(config)
 
     if config.STATUS == 'inference':
-        results, image_arrays = trainer.inference()
-        pd.DataFrame(results).to_csv(config.SAVE_CSV_PATH)
-        for result, image_array in zip(results, image_arrays):
+        if not os.path.exists(config.SAVE_CSV_PATH):
+            results = trainer.inference(output_shape=(300, 300, 3))
+            results = pd.DataFrame(results)
+            results.to_csv(config.SAVE_CSV_PATH)
+        else:
+            results = pd.read_csv(config.SAVE_CSV_PATH)
+
+        for _, row in results.iterrows():
+            fname = row['fname']
+            image_array = cv2.imread(os.path.join(config.TEST_IMAGE_PATH, fname))
+            image_array = cv2.resize(image_array, (row['height'], row['width']))
             for idx in range(config.CLASS_NUMBER):
-                kpt = (result[f'cls_{idx}_kptx_pred'], result[f'cls_{idx}_kpty_pred'])
+                kpt = (row[f'cls_{idx}_kptx_pred'], row[f'cls_{idx}_kpty_pred'])
                 image_array = cv2.circle(image_array, kpt, radius=0, color=(0, 0, 255), thickness=10)
                 cv2.imshow('Prediction', image_array)
 

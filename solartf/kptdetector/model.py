@@ -1,5 +1,5 @@
 import numpy as np
-from tensorflow.keras.layers import (Concatenate, Dense, Dropout, GlobalAveragePooling2D, Input, Reshape)
+from tensorflow.keras.layers import (Dense, Dropout, GlobalAveragePooling2D, Input, Reshape)
 from tensorflow.keras.losses import (binary_crossentropy, mse)
 from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
@@ -12,14 +12,17 @@ class TFResNet(TFModelBase):
                  input_shape,
                  n_classes,
                  num_res_blocks=3,
+                 num_stage=3,
                  num_filters_in=16,
                  dropout_rate=.3):
         self.input_shape = input_shape
         self.n_classes = n_classes
 
         self.num_res_blocks = num_res_blocks
+        self.num_stage = num_stage
         self.num_filters_in = num_filters_in
         self.backbone = ResNetV2(num_res_blocks=self.num_res_blocks,
+                                 num_stage=self.num_stage,
                                  num_filters_in=self.num_filters_in)
         self.dropout_rate = dropout_rate
         self.dropout = Dropout(rate=dropout_rate)
@@ -49,9 +52,9 @@ class TFResNet(TFModelBase):
         x = self.dropout(x)
         x = GlobalAveragePooling2D()(x)
         cls = Dense(units=self.n_classes, activation='sigmoid', name='cls_output')(x)
-        kpt_x = Dense(units=self.n_classes, activation='sigmoid')(x)
-        kpt_y = Dense(units=self.n_classes, activation='sigmoid')(x)
-        kpt = Concatenate(axis=-1)([kpt_x, kpt_y])
+        x = Dense(units=512, activation='relu')(x)
+        x = self.dropout(x)
+        kpt = Dense(units=self.n_classes * 2, activation='sigmoid')(x)
         kpt = Reshape(target_shape=(-1, 2), name='kpt_output')(kpt)
 
         predictions = {'cls': cls, 'kpt': kpt}

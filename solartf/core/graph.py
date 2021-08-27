@@ -310,9 +310,11 @@ class SSDNeck(tf.keras.Model):
 class ResNetV2(tf.keras.Model):
     def __init__(self,
                  num_res_blocks=3,
+                 num_stage=3,
                  num_filters_in=16):
         super(ResNetV2, self).__init__()
         self.num_res_blocks = num_res_blocks
+        self.num_stage = num_stage
         self.num_filters_in = num_filters_in
         self.depth = self.num_res_blocks * 9 + 2
 
@@ -324,7 +326,7 @@ class ResNetV2(tf.keras.Model):
 
         # Instantiate the stack of residual units
         num_filters_in = self.num_filters_in
-        for stage in range(3):
+        for stage in range(self.num_stage):
             for res_block in range(self.num_res_blocks):
                 activation = 'relu'
                 batch_normalization = True
