@@ -11,6 +11,7 @@ from solartf.metric.plot import ClassificationMetricPlot
 
 
 class Config(LeNet5Config):
+    IMAGE_SHAPE = (32, 32, 3)
     STATUS = 'train'
     CLASS_NUMBER = 4
     LABEL_NAME = ['cmfd', 'crowd', 'lobby', 'mafa']
@@ -43,7 +44,8 @@ class Config(LeNet5Config):
     # TEST_IMAGE_PATH = '/Users/huangshangyu/Downloads/classroom/sample_FLOW_AI_0604/maskimage/clsdata/valid'
     TEST_IMAGE_PATH = os.path.join(DATA_ROOT, 'test')
 
-    MODEL = TFLeNet5
+    MODEL = TFLeNet5(input_shape=IMAGE_SHAPE,
+                     n_classes=CLASS_NUMBER)
     MODEL_WEIGHT_PATH = os.path.join(DATA_ROOT, 'models',
                                      'epoch-02000_loss-0.5718_val_loss-0.2581_accuracy-0.8687_val_accuracy-0.9375.h5')
     # MODEL_WEIGHT_PATH = None

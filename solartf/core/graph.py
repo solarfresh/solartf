@@ -1,107 +1,13 @@
 import tensorflow as tf
 from tensorflow.keras.models import Model
 from tensorflow.keras import backend as K
-from tensorflow.keras.layers import (Activation, Add, BatchNormalization, Conv2D,
-                                     Conv2DTranspose, Dense, Dropout, Flatten, ZeroPadding2D)
+from tensorflow.keras.layers import (Activation, Add, AveragePooling2D, BatchNormalization,
+                                     Conv2D, Conv2DTranspose, Dense, Dropout, Flatten,
+                                     ZeroPadding2D)
 from .activation import (hard_swish, relu)
-from .block import inverted_res_block
+from .block import (inverted_res_block, resnet_block)
 from .layer import GaussianBlur
 from .util import get_filter_nb_by_depth
-
-
-class MobileNetV3(tf.keras.Model):
-    def __init__(self,
-                 alpha=1.0,
-                 ref_filter_nb=32,
-                 model_type='small',
-                 minimalistic=False):
-        super(MobileNetV3, self).__init__()
-        self.minimalistic = minimalistic
-        self.alpha = alpha
-        self.model_type = model_type
-        self.ref_filter_nb = ref_filter_nb
-
-    def call(self, inputs, training=None, mask=None):
-        channel_axis = 1 if K.image_data_format() == 'channels_first' else -1
-        if self.minimalistic:
-            kernel = 3
-            activation = relu
-            se_ratio = None
-        else:
-            kernel = 5
-            activation = hard_swish
-            se_ratio = 0.25
-
-        x = GaussianBlur(kernel_size=3, mu=0., sigma=1.5)(inputs)
-
-        x = Conv2D(4 * self.ref_filter_nb // 10,
-                   kernel_size=3,
-                   strides=(2, 2),
-                   padding='same',
-                   use_bias=True,
-                   name=f'mobilenetv3_{self.model_type}_conv_0')(x)
-        x = BatchNormalization(axis=channel_axis,
-                               epsilon=1e-3,
-                               momentum=0.999,
-                               name=f'mobilenetv3_{self.model_type}_conv/bn_0')(x)
-        x = activation(x, name=f'mobilenetv3_{self.model_type}_activation_0')
-
-        if self.model_type == 'small':
-            x = self.mobilenet_v3_small_stack_fn(x, kernel, activation, se_ratio)
-            last_point_ch = 1024
-        else:
-            raise NotImplementedError(f'{self.model_type} is not implemented yet...')
-
-        last_conv_ch = get_filter_nb_by_depth(K.int_shape(x)[channel_axis] * 6)
-        if self.alpha > 1.0:
-            last_point_ch = get_filter_nb_by_depth(last_point_ch * self.alpha)
-
-        x = Conv2D(last_conv_ch,
-                   kernel_size=1,
-                   padding='same',
-                   use_bias=True,
-                   name=f'mobilenetv3_{self.model_type}_conv_1')(x)
-        x = BatchNormalization(axis=channel_axis,
-                               epsilon=1e-3,
-                               momentum=0.999,
-                               name=f'mobilenetv3_{self.model_type}_conv/bn_1')(x)
-        x = activation(x, name=f'mobilenetv3_{self.model_type}_activation_1')
-        x = Conv2D(last_point_ch,
-                   kernel_size=1,
-                   padding='same',
-                   use_bias=True,
-                   name=f'mobilenetv3_{self.model_type}_conv_2')(x)
-        x = activation(x, name=f'mobilenetv3_{self.model_type}_activation_2')
-
-        return Model(inputs, x)
-
-    def mobilenet_v3_small_stack_fn(self, x, kernel, activation, se_ratio):
-        x = inverted_res_block(x, 1, get_filter_nb_by_depth(self.ref_filter_nb, alpha=self.alpha),
-                               3, 2, se_ratio, relu, 0)
-        x = inverted_res_block(x, 72. / 16, get_filter_nb_by_depth(self.ref_filter_nb, alpha=self.alpha),
-                               3, 2, None, relu, 1)
-        x = inverted_res_block(x, 88. / 24, get_filter_nb_by_depth(self.ref_filter_nb, alpha=self.alpha),
-                               3, 1, None, relu, 2)
-        x = inverted_res_block(x, 4, get_filter_nb_by_depth(self.ref_filter_nb, alpha=self.alpha),
-                               kernel, 2, se_ratio, activation, 3)
-        x = inverted_res_block(x, 6, get_filter_nb_by_depth(self.ref_filter_nb, alpha=self.alpha),
-                               kernel, 1, se_ratio, activation, 4)
-        x = inverted_res_block(x, 6, get_filter_nb_by_depth(self.ref_filter_nb, alpha=self.alpha),
-                               kernel, 1, se_ratio, activation, 5)
-        x = inverted_res_block(x, 3, get_filter_nb_by_depth(self.ref_filter_nb, alpha=self.alpha),
-                               kernel, 1, se_ratio, activation, 6)
-        x = inverted_res_block(x, 3, get_filter_nb_by_depth(self.ref_filter_nb, alpha=self.alpha),
-                                kernel, 1, se_ratio, activation, 7)
-        x = inverted_res_block(x, 6, get_filter_nb_by_depth(self.ref_filter_nb, alpha=self.alpha),
-                               kernel, 2, se_ratio, activation, 8)
-        x = inverted_res_block(x, 6, get_filter_nb_by_depth(self.ref_filter_nb, alpha=self.alpha),
-                               kernel, 1, se_ratio, activation, 9)
-        x = inverted_res_block(x, 6, get_filter_nb_by_depth(self.ref_filter_nb, alpha=self.alpha),
-                               kernel, 1, se_ratio, activation, 10)
-        return x
-
-    def get_config(self):
-        return super(MobileNetV3, self).get_config()
 
 
 class LeNet5(tf.keras.Model):
@@ -204,6 +110,101 @@ class FPN(tf.keras.Model):
         return super(FPN, self).get_config()
 
 
+class MobileNetV3(tf.keras.Model):
+    def __init__(self,
+                 alpha=1.0,
+                 ref_filter_nb=32,
+                 model_type='small',
+                 minimalistic=False):
+        super(MobileNetV3, self).__init__()
+        self.minimalistic = minimalistic
+        self.alpha = alpha
+        self.model_type = model_type
+        self.ref_filter_nb = ref_filter_nb
+
+    def call(self, inputs, training=None, mask=None):
+        channel_axis = 1 if K.image_data_format() == 'channels_first' else -1
+        if self.minimalistic:
+            kernel = 3
+            activation = relu
+            se_ratio = None
+        else:
+            kernel = 5
+            activation = hard_swish
+            se_ratio = 0.25
+
+        x = GaussianBlur(kernel_size=3, mu=0., sigma=1.5)(inputs)
+
+        x = Conv2D(4 * self.ref_filter_nb // 10,
+                   kernel_size=3,
+                   strides=(2, 2),
+                   padding='same',
+                   use_bias=True,
+                   name=f'mobilenetv3_{self.model_type}_conv_0')(x)
+        x = BatchNormalization(axis=channel_axis,
+                               epsilon=1e-3,
+                               momentum=0.999,
+                               name=f'mobilenetv3_{self.model_type}_conv/bn_0')(x)
+        x = activation(x, name=f'mobilenetv3_{self.model_type}_activation_0')
+
+        if self.model_type == 'small':
+            x = self.mobilenet_v3_small_stack_fn(x, kernel, activation, se_ratio)
+            last_point_ch = 1024
+        else:
+            raise NotImplementedError(f'{self.model_type} is not implemented yet...')
+
+        last_conv_ch = get_filter_nb_by_depth(K.int_shape(x)[channel_axis] * 6)
+        if self.alpha > 1.0:
+            last_point_ch = get_filter_nb_by_depth(last_point_ch * self.alpha)
+
+        x = Conv2D(last_conv_ch,
+                   kernel_size=1,
+                   padding='same',
+                   use_bias=True,
+                   name=f'mobilenetv3_{self.model_type}_conv_1')(x)
+        x = BatchNormalization(axis=channel_axis,
+                               epsilon=1e-3,
+                               momentum=0.999,
+                               name=f'mobilenetv3_{self.model_type}_conv/bn_1')(x)
+        x = activation(x, name=f'mobilenetv3_{self.model_type}_activation_1')
+        x = Conv2D(last_point_ch,
+                   kernel_size=1,
+                   padding='same',
+                   use_bias=True,
+                   name=f'mobilenetv3_{self.model_type}_conv_2')(x)
+        x = activation(x, name=f'mobilenetv3_{self.model_type}_activation_2')
+
+        return Model(inputs, x)
+
+    def mobilenet_v3_small_stack_fn(self, x, kernel, activation, se_ratio):
+        x = inverted_res_block(x, 1, get_filter_nb_by_depth(self.ref_filter_nb, alpha=self.alpha),
+                               3, 2, se_ratio, relu, 0)
+        x = inverted_res_block(x, 72. / 16, get_filter_nb_by_depth(self.ref_filter_nb, alpha=self.alpha),
+                               3, 2, None, relu, 1)
+        x = inverted_res_block(x, 88. / 24, get_filter_nb_by_depth(self.ref_filter_nb, alpha=self.alpha),
+                               3, 1, None, relu, 2)
+        x = inverted_res_block(x, 4, get_filter_nb_by_depth(self.ref_filter_nb, alpha=self.alpha),
+                               kernel, 2, se_ratio, activation, 3)
+        x = inverted_res_block(x, 6, get_filter_nb_by_depth(self.ref_filter_nb, alpha=self.alpha),
+                               kernel, 1, se_ratio, activation, 4)
+        x = inverted_res_block(x, 6, get_filter_nb_by_depth(self.ref_filter_nb, alpha=self.alpha),
+                               kernel, 1, se_ratio, activation, 5)
+        x = inverted_res_block(x, 3, get_filter_nb_by_depth(self.ref_filter_nb, alpha=self.alpha),
+                               kernel, 1, se_ratio, activation, 6)
+        x = inverted_res_block(x, 3, get_filter_nb_by_depth(self.ref_filter_nb, alpha=self.alpha),
+                                kernel, 1, se_ratio, activation, 7)
+        x = inverted_res_block(x, 6, get_filter_nb_by_depth(self.ref_filter_nb, alpha=self.alpha),
+                               kernel, 2, se_ratio, activation, 8)
+        x = inverted_res_block(x, 6, get_filter_nb_by_depth(self.ref_filter_nb, alpha=self.alpha),
+                               kernel, 1, se_ratio, activation, 9)
+        x = inverted_res_block(x, 6, get_filter_nb_by_depth(self.ref_filter_nb, alpha=self.alpha),
+                               kernel, 1, se_ratio, activation, 10)
+        return x
+
+    def get_config(self):
+        return super(MobileNetV3, self).get_config()
+
+
 class MobileNetSingleScaleDetectionNeck(tf.keras.Model):
     def __init__(self,
                  l2_regularization=0.0005,
@@ -304,3 +305,75 @@ class SSDNeck(tf.keras.Model):
 
     def get_config(self):
         return super(SSDNeck, self).get_config()
+
+
+class ResNetV2(tf.keras.Model):
+    def __init__(self,
+                 num_res_blocks=3,
+                 num_stage=3,
+                 num_filters_in=16):
+        super(ResNetV2, self).__init__()
+        self.num_res_blocks = num_res_blocks
+        self.num_stage = num_stage
+        self.num_filters_in = num_filters_in
+        self.depth = self.num_res_blocks * 9 + 2
+
+    def call(self, inputs, training=None, mask=None):
+        # v2 performs Conv2D with BN-ReLU on input before splitting into 2 paths
+        x = resnet_block(inputs=inputs,
+                         num_filters=self.num_filters_in,
+                         conv_first=True)
+
+        # Instantiate the stack of residual units
+        num_filters_in = self.num_filters_in
+        for stage in range(self.num_stage):
+            for res_block in range(self.num_res_blocks):
+                activation = 'relu'
+                batch_normalization = True
+                strides = 1
+                if stage == 0:
+                    num_filters_out = num_filters_in * 4
+                    if res_block == 0:  # first layer and first stage
+                        activation = None
+                        batch_normalization = False
+                else:
+                    num_filters_out = num_filters_in * 2
+                    if res_block == 0:  # first layer but not first stage
+                        strides = 2  # downsample
+
+                # bottleneck residual unit
+                y = resnet_block(inputs=x,
+                                 num_filters=num_filters_in,
+                                 kernel_size=1,
+                                 strides=strides,
+                                 activation=activation,
+                                 batch_normalization=batch_normalization,
+                                 conv_first=False)
+                y = resnet_block(inputs=y,
+                                 num_filters=num_filters_in,
+                                 conv_first=False)
+                y = resnet_block(inputs=y,
+                                 num_filters=num_filters_out,
+                                 kernel_size=1,
+                                 conv_first=False)
+                if res_block == 0:
+                    # linear projection residual shortcut connection to match
+                    # changed dims
+                    x = resnet_block(inputs=x,
+                                     num_filters=num_filters_out,
+                                     kernel_size=1,
+                                     strides=strides,
+                                     activation=None,
+                                     batch_normalization=False)
+                x = Add()([x, y])
+
+            num_filters_in = num_filters_out
+
+        # Add classifier on top.
+        # v2 has BN-ReLU before Pooling
+        x = BatchNormalization()(x)
+        x = Activation('relu')(x)
+        return Model(inputs, x)
+
+    def get_config(self):
+        return super(ResNetV2, self).get_config()
