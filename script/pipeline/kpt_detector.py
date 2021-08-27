@@ -8,15 +8,18 @@ from solartf.kptdetector.pipeline import KeypointDetectPipeline
 from solartf.kptdetector.config import ResNetV2Config
 from solartf.kptdetector.model import TFResNet
 from solartf.kptdetector.processor import KeypointAugmentation
+from solartf.core.loss import smooth_L1_loss
 
 
 class Config(ResNetV2Config):
 
     # train or freeze or show or partial_freeze or inference
     STATUS = 'inference'
-    # MODEL_WEIGHT_PATH = '/Users/huangshangyu/Downloads/model/' \
-    #                     'kptdetector-00150_loss-0.2703_val_loss-0.2712_cls_output_loss-0.0066_val_cls_output_loss-0.0079_kpt_output_loss-0.0013_val_kpt_output_loss-0.0016.h5'
-    MODEL_WEIGHT_PATH = None
+    MODEL_WEIGHT_PATH = '/Users/huangshangyu/Downloads/model/kptdetector/' \
+                        'kptdetector-00060_loss-0.4823_val_loss-0.4841_cls_output_loss-0.0236_val_cls_output_loss-0.0258_kpt_output_loss-0.0197_val_kpt_output_loss-0.0207.h5'
+    # MODEL_WEIGHT_PATH = None
+    TRAIN_INITIAL_EPOCH = 0
+    TRAIN_EPOCH = 200
 
     MODEL_FREEZE_DIR = '/Users/huangshangyu/Downloads/model'
     MODEL_FREEZE_NAME = 'kptdetector.pb'
@@ -34,7 +37,7 @@ class Config(ResNetV2Config):
     TEST_LABEL_PATH = os.path.join(DATA_ROOT, 'test', 'annotations')
 
     TRAIN_LOSS = {'cls': losses.binary_crossentropy,
-                  'kpt': losses.mse}
+                  'kpt': smooth_L1_loss}
     TRAIN_LOSS_WEIGHTS = [1., 1.]
 
     TRAIN_BATCH_SIZE = 32
@@ -55,7 +58,7 @@ class Config(ResNetV2Config):
                                           h_shift=(-10, 10),
                                           v_shift=(-10, 10))]
 
-    TRAIN_OPTIMIZER = optimizers.Adam(learning_rate=1e-4, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=5e-04)
+    TRAIN_OPTIMIZER = optimizers.Adam(learning_rate=1e-3, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=5e-04)
 
     IMAGE_SHAPE = (64, 64, 3)
     CLASS_NUMBER = 4
@@ -104,11 +107,16 @@ if __name__ == '__main__':
 
     if config.STATUS == 'freeze':
         trainer.load_model()
-        #
-        # trainer.model.model = tf.keras.models.Model(ssd_image_input, predictions)
-        # trainer.model.model.summary()
-        #
-        # trainer.model.freeze_graph(save_dir=config.MODEL_FREEZE_DIR, model_name=config.MODEL_FREEZE_NAME)
+
+        cls_output = trainer.model.model.get_layer('cls_output').output
+        kpt_output = trainer.model.model.get_layer('kpt_output').output
+        image_input = trainer.model.model.get_layer('image_input').input
+        kpt_detect = Concatenate(axis=2, name='kpt_detect')([cls_output, kpt_output])
+
+        trainer.model.model = tf.keras.models.Model(image_input, kpt_detect)
+        trainer.model.model.summary()
+
+        trainer.model.freeze_graph(save_dir=config.MODEL_FREEZE_DIR, model_name=config.MODEL_FREEZE_NAME)
 
     if config.STATUS == 'partial_freeze':
         trainer.load_model()

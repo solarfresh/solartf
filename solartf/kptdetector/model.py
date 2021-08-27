@@ -39,16 +39,11 @@ class TFResNet(TFModelBase):
         return batch_image_input, {'cls': batch_cls_output, 'kpt': batch_kpt_output}
 
     def data_postprocess(self, outputs, meta):
-        kpt_outputs = outputs['kpt']
-        height, width, _ = self.input_shape
-        kpt_outputs[..., 0] = kpt_outputs[..., 0] * width
-        kpt_outputs[..., 1] = kpt_outputs[..., 1] * height
-        outputs['kpt'] = kpt_outputs.astype(np.int32)
         return outputs
 
     def build_model(self):
         img_height, img_width, _ = self.input_shape
-        image_input = Input(shape=self.input_shape, name='resnet_input')
+        image_input = Input(shape=self.input_shape, name='image_input')
         backbone = self.backbone.call(image_input)
         x = backbone.layers[-1].output
         x = self.dropout(x)
