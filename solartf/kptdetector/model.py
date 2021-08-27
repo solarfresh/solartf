@@ -25,13 +25,13 @@ class TFResNet(TFModelBase):
         self.dropout = Dropout(rate=dropout_rate)
 
     def data_preprocess(self, inputs, training=True):
-        image_input_list= inputs['image_input_list']
+        image_input_list = inputs['image_input_list']
         kpt_input_list = inputs['kpt_input_list']
 
         batch_image_input = np.stack([image_input.image_array
                                       for image_input in image_input_list], axis=0)
         batch_cls_output = np.stack([kpt_input.labels for kpt_input in kpt_input_list], axis=0)
-        batch_kpt_output = np.stack([kpt_input.points_tensor for kpt_input in kpt_input_list], axis=0)
+        batch_kpt_output = np.stack([kpt_input.points_tensor for kpt_input in kpt_input_list], axis=0).astype(np.float)
         height, width, _ = self.input_shape
         batch_kpt_output[..., 0] = batch_kpt_output[..., 0] / width
         batch_kpt_output[..., 1] = batch_kpt_output[..., 1] / height
@@ -39,6 +39,11 @@ class TFResNet(TFModelBase):
         return batch_image_input, {'cls': batch_cls_output, 'kpt': batch_kpt_output}
 
     def data_postprocess(self, outputs, meta):
+        kpt_outputs = outputs['kpt']
+        height, width, _ = self.input_shape
+        kpt_outputs[..., 0] = kpt_outputs[..., 0] * width
+        kpt_outputs[..., 1] = kpt_outputs[..., 1] * height
+        outputs['kpt'] = kpt_outputs.astype(np.int32)
         return outputs
 
     def build_model(self):

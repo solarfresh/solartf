@@ -14,6 +14,7 @@ class KeypointDirectoryGenerator(KerasGeneratorBase):
                  shuffle=True,
                  batch_size=32,
                  image_type='bgr',
+                 dataset_type='train',
                  augment=None,
                  processor=None,
                  in_memory=False,):
@@ -23,6 +24,7 @@ class KeypointDirectoryGenerator(KerasGeneratorBase):
         self.shuffle = shuffle
         self.batch_size = batch_size
         self.image_type = image_type
+        self.dataset_type = dataset_type
         self.in_memory = in_memory
         self.processor = processor
 
@@ -72,7 +74,7 @@ class KeypointDirectoryGenerator(KerasGeneratorBase):
         for augment in self.augment:
             augment.execute(image_input_list, kpt_input_list)
 
-        if self.processor is None:
+        if self.dataset_type == 'test':
             return image_input_list, kpt_input_list
         else:
             batch_inputs, batch_outputs = self.processor({'image_input_list': image_input_list,

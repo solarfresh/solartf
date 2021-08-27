@@ -1,3 +1,4 @@
+import cv2
 import os
 import tensorflow as tf
 from tensorflow.keras import (losses, optimizers)
@@ -12,9 +13,9 @@ from solartf.kptdetector.processor import KeypointAugmentation
 class Config(ResNetV2Config):
 
     # train or freeze or show or partial_freeze or inference
-    STATUS = 'train'
+    STATUS = 'inference'
     # MODEL_WEIGHT_PATH = '/Users/huangshangyu/Downloads/model/' \
-    #                     'epoch-00790_mbox_conf_compute_classification_metric-0.9944_val_mbox_conf_compute_classification_metric-0.9944_mbox_loc_compute_localization_loss-0.7338_val_mbox_loc_compute_localization_loss-0.7263.h5'
+    #                     'kptdetector-00150_loss-0.2703_val_loss-0.2712_cls_output_loss-0.0066_val_cls_output_loss-0.0079_kpt_output_loss-0.0013_val_kpt_output_loss-0.0016.h5'
     MODEL_WEIGHT_PATH = None
 
     MODEL_FREEZE_DIR = '/Users/huangshangyu/Downloads/model'
@@ -64,7 +65,7 @@ class Config(ResNetV2Config):
                      num_filters_in=16,
                      dropout_rate=.3)
 
-    TRAIN_MODEL_CHECKPOINT_PATH = '/Users/huangshangyu/Downloads/model/kptdetector-{epoch:05d}' \
+    TRAIN_MODEL_CHECKPOINT_PATH = '/Users/huangshangyu/Downloads/model/kptdetector/kptdetector-{epoch:05d}' \
                                   + ''.join([f'_{key}-{{{key}:.4f}}_val_{key}-{{val_{key}:.4f}}'
                                              for key in ['loss', 'cls_output_loss', 'kpt_output_loss']]) + '.h5'
     TRAIN_CALLBACKS = [
@@ -83,7 +84,16 @@ if __name__ == '__main__':
     trainer = KeypointDetectPipeline(config)
 
     if config.STATUS == 'inference':
-        trainer.inference()
+        results, image_arrays = trainer.inference()
+        for result, image_array in zip(results, image_arrays):
+            for idx in range(config.CLASS_NUMBER):
+                kpt = (result[f'cls_{idx}_kptx_pred'], result[f'cls_{idx}_kpty_pred'])
+                image_array = cv2.circle(image_array, kpt, radius=0, color=(0, 0, 255), thickness=10)
+                cv2.imshow('Prediction', image_array)
+
+            key = cv2.waitKey(5000)
+            if key == ord('q') or key == 27:
+                break
 
     if config.STATUS == 'train':
         trainer.train()
