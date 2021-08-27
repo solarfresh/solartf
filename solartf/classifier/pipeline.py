@@ -31,54 +31,15 @@ class ClassificationPipeline(TFPipelineBase):
         return pd.DataFrame(results)
 
     def load_dataset(self):
-        image_dir = {
-            'train': self.config.TRAIN_IMAGE_PATH,
-            'valid': self.config.VALID_IMAGE_PATH,
-            'test': self.config.TEST_IMAGE_PATH
-        }
-        shuffle = {
-            'train': self.config.TRAIN_SHUFFLE,
-            'valid': self.config.VALID_SHUFFLE,
-            'test': self.config.TEST_SHUFFLE
-        }
-        batch_size = {
-            'train': self.config.TRAIN_BATCH_SIZE,
-            'valid': self.config.VALID_BATCH_SIZE,
-            'test': self.config.TEST_BATCH_SIZE
-        }
-        augment = {
-            'train': self.config.TRAIN_AUGMENT,
-            'valid': self.config.VALID_AUGMENT,
-            'test': None
-        }
-
         self.dataset = {}
         for set_type in ['train', 'valid', 'test']:
             self.dataset[set_type] = ClassifierDirectoryGenerator(
-                image_dir=image_dir[set_type],
+                image_dir=self.image_dir[set_type],
                 image_shape=self.config.IMAGE_SHAPE,
                 dataset_type=set_type,
-                shuffle=shuffle[set_type],
-                batch_size=batch_size[set_type],
-                augment=augment[set_type],
+                shuffle=self.shuffle[set_type],
+                batch_size=self.batch_size[set_type],
+                augment=self.augment[set_type],
                 image_type=self.config.IMAGE_TYPE,)
-
-        return self
-
-    def load_model(self):
-        self.model = self.config.MODEL(input_shape=self.config.IMAGE_SHAPE,
-                                       n_classes=self.config.CLASS_NUMBER)
-
-        self.model.build_model()
-
-        if self.config.MODEL_WEIGHT_PATH is not None:
-            self.model.load_weights(self.config.MODEL_WEIGHT_PATH,
-                                    skip_mismatch=True,
-                                    by_name=True)
-
-        self.model.compile(optimizer=self.config.TRAIN_OPTIMIZER,
-                           loss=self.config.TRAIN_LOSS,
-                           metrics=self.config.TRAIN_METRIC,
-                           loss_weights=self.config.TRAIN_LOSS_WEIGHTS)
 
         return self

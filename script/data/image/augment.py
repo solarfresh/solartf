@@ -1,10 +1,10 @@
 import cv2
-from solartf.data.image.generator import ImageDirectoryGenerator
+from solartf.classifier.generator import ClassifierDirectoryGenerator
 from solartf.data.image.processor import ImageAugmentation
 
 
 class Config:
-    IMAGE_DIR = '/Users/huangshangyu/Downloads/experiment/frames'
+    IMAGE_DIR = '/Users/huangshangyu/Downloads/experiment/maskimage/tmp/train'
     IMAGE_TYPE = 'bgr'
     IMAGE_SHAPE = (512, 512, 3)
 
@@ -25,12 +25,14 @@ if __name__ == '__main__':
                                 h_shift=config.H_SHIFT,
                                 v_shift=config.V_SHIFT)
 
-    for image_input in ImageDirectoryGenerator(image_dir=config.IMAGE_DIR,
-                                               image_type=config.IMAGE_TYPE,
-                                               image_shape=config.IMAGE_SHAPE):
+    for image_input_list, _ in ClassifierDirectoryGenerator(image_dir=config.IMAGE_DIR,
+                                                            image_type=config.IMAGE_TYPE,
+                                                            image_shape=config.IMAGE_SHAPE,
+                                                            dataset_type='test'):
 
-        augment.execute(image_input=image_input)
-        cv2.imshow('Augment', image_input.image_array)
+        augment.execute(image_input_list=image_input_list)
+        for image_input in image_input_list:
+            cv2.imshow('Augment', image_input.image_array)
 
         key = cv2.waitKey(5000)
         if key == ord('q') or key == 27:
