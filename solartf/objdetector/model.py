@@ -19,6 +19,7 @@ class AnchorBaseDetectTFModel(TFModelBase):
                  input_shape,
                  n_classes,
                  aspect_ratios,
+                 feature_map_shapes,
                  scales=None,
                  step_shapes=None,
                  offset_shapes=None,
@@ -52,8 +53,17 @@ class AnchorBaseDetectTFModel(TFModelBase):
         self.bbox_labeler_method = bbox_labeler_method
         self.anchor_generator = GridAnchor()
         # It is in corner representation
-        self.feature_map_names = [''] * self.n_predictor_layers
-        self.build_model()
+        self.feature_map_shapes = feature_map_shapes
+        self.detect_head = AnchorDetectHead(self.n_classes,
+                                            image_shape=self.input_shape[:2],
+                                            n_boxes=self.n_boxes,
+                                            scales=self.scales,
+                                            aspect_ratios=self.aspect_ratios,
+                                            step_shapes=self.step_shapes,
+                                            offset_shapes=self.offset_shapes,
+                                            variances=self.variances,
+                                            l2_regularization=0.0005)
+
         self.anchor_tensor = self._get_anchor_tensor(image_shape=input_shape[:2])
         self.bbox_labeler = BBoxLabeler(self.anchor_tensor, )
 
@@ -71,16 +81,6 @@ class AnchorBaseDetectTFModel(TFModelBase):
         self.class_vector = np.eye(self.n_classes)
         self.variances_tensor = np.zeros(shape=self.anchor_tensor.shape)
         self.variances_tensor += self.variances
-
-        self.detect_head = AnchorDetectHead(self.n_classes,
-                                            image_shape=self.input_shape[:2],
-                                            n_boxes=self.n_boxes,
-                                            scales=self.scales,
-                                            aspect_ratios=self.aspect_ratios,
-                                            step_shapes=self.step_shapes,
-                                            offset_shapes=self.offset_shapes,
-                                            variances=self.variances,
-                                            l2_regularization=0.0005)
 
     def data_preprocess(self, inputs):
         return self._train_encoder(inputs)
@@ -160,9 +160,8 @@ class AnchorBaseDetectTFModel(TFModelBase):
     def _get_anchor_tensor(self, image_shape):
         anchor_tensor_list = []
         for index in range(self.n_predictor_layers):
-            feature_map_shape = self.model.get_layer(name=self.feature_map_names[index]).output_shape[1:3]
             anchor_tensor = self.anchor_generator.generate_anchors(image_shape=image_shape,
-                                                                   feature_map_shape=feature_map_shape,
+                                                                   feature_map_shape=self.feature_map_shapes[index],
                                                                    aspect_ratios=self.aspect_ratios[index],
                                                                    scale=self.scales[index],
                                                                    step_shape=self.step_shapes[index],
@@ -176,17 +175,15 @@ class AnchorBaseDetectTFModel(TFModelBase):
 
 class MobileNetV3TFModel(AnchorBaseDetectTFModel):
     def __init__(self,
-                 n_feature_map=3,
                  fpn_n_filter=40,
                  model_type='small',
                  *args, **kwargs):
-        super(MobileNetV3TFModel, self).__init__(*args, **kwargs)
-        self.n_feature_map = n_feature_map
         self.model_type = model_type
         self.fpn = FPN(n_filters=fpn_n_filter)
+        super(MobileNetV3TFModel, self).__init__(*args, **kwargs)
 
     def build_model(self):
-        image_input = Input(shape=self.input_shape, name='ssd_image_input')
+        image_input = Input(shape=self.input_shape, name='detect_image_input')
         backbone = MobileNetV3(alpha=1.0,
                                model_type=self.model_type,
                                minimalistic=True).call(image_input)
@@ -200,11 +197,17 @@ class MobileNetV3TFModel(AnchorBaseDetectTFModel):
         ]
 
         detect_neck = self.fpn.call(backbone_outputs)
-        predictions = self.detect_head.call(detect_neck[:self.n_feature_map])
+
+        detect_neck.reverse()
+        x = detect_neck[-1]
+        for idx in range(4):
+            x = inverted_res_block(x, 6, 32, 3, 1, .25, hard_swish, name=f'{idx}/neck/conv0')
+            x = inverted_res_block(x, 6, 32, 3, 2, .25, hard_swish, name=f'{idx}/neck/conv1')
+            detect_neck.append(x)
+
+        predictions = self.detect_head.call(detect_neck[-self.n_predictor_layers:])
 
         self.model = Model(image_input, predictions)
-        self.feature_map_names = [f'mbox_loc_{index}/conv' for index in range(self.n_predictor_layers)]
-
         return self
 
     def detect_conv_block(self, inputs, name=None):

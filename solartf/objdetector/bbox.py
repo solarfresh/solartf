@@ -1,6 +1,6 @@
 import numpy as np
 import tensorflow as tf
-from solartf.core.output import OutputBase
+from typing import List
 from solartf.data.bbox.type import BBoxesTensor
 
 

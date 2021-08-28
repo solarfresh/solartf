@@ -53,6 +53,9 @@ class KeypointDetectPipeline(TFPipelineBase):
         return result_list
 
     def load_dataset(self):
+        if self.model is None:
+            raise ValueError(f'model must be load before loading datasets')
+
         self.dataset = {}
         for set_type in ['train', 'valid', 'test']:
             self.dataset[set_type] = KeypointDirectoryGenerator(
