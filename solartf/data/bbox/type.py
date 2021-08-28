@@ -1,6 +1,6 @@
+import logging
 import numpy as np
 import tensorflow as tf
-from typing import List
 
 
 class BBoxesMixin:
@@ -23,6 +23,67 @@ class BBoxesMixin:
             return _stack((self.tops, self.lefts, self.bottoms, self.rights), axis=-1)
         else:
             raise ValueError(f'The coordinate {coord} does not support...')
+
+    def compute_iou_mask(self, boxes, overlap_threshold):
+        iou = self.jaccard(boxes)
+        logging.debug(f'Obtained IoU is {iou}')
+        # make a mask of all "matched" predictions vs gt
+        logging.debug(f'overlap_threshold is {overlap_threshold}...')
+        return iou >= overlap_threshold
+
+    def intersect_area(self, boxes):
+        """
+        Compute the area of intersection between two rectangular bounding box
+        Bounding boxes use corner notation : [x1, y1, x2, y2]
+        Args:
+          box_a: (np.array) bounding boxes, Shape: [A,4].
+          box_b: (np.array) bounding boxes, Shape: [B,4].
+        Return:
+          np.array intersection area, Shape: [A,B].
+        """
+        box_a = self.bboxes.copy()
+        box_b = boxes.copy()
+        logging.debug(f'shape of box_a is {box_a.shape}')
+        logging.debug(f'shape of box_b is {box_b.shape}')
+        resized_a = box_a[:, np.newaxis, :]
+        resized_b = box_b[np.newaxis, :, :]
+        max_xy = np.minimum(resized_a[:, :, 2:], resized_b[:, :, 2:])
+        min_xy = np.maximum(resized_a[:, :, :2], resized_b[:, :, :2])
+
+        diff_xy = (max_xy - min_xy)
+        # although clip is faster, it will be wrong when diff_xy are negative
+        inter = np.maximum(diff_xy, 0.)
+        # inter = np.clip(diff_xy, a_min=0, a_max=np.max(diff_xy))
+        return inter[:, :, 0] * inter[:, :, 1]
+
+    def union_area(self, boxes, inter):
+        box_a = self.bboxes.copy()
+        box_b = boxes.copy()
+        area_a = ((box_a[:, 2] - box_a[:, 0]) * (box_a[:, 3] - box_a[:, 1]))
+        area_b = ((box_b[:, 2] - box_b[:, 0]) * (box_b[:, 3] - box_b[:, 1]))
+        area_a = area_a[:, np.newaxis]
+        area_b = area_b[np.newaxis, :]
+        return area_a + area_b - inter
+
+    def jaccard(self, boxes):
+        """
+        Compute the jaccard overlap of two sets of boxes.  The jaccard overlap
+        is simply the intersection over union of two boxes.  Here we operate on
+        ground truth boxes and default boxes.
+        E.g.:
+            A ∩ B / A ∪ B = A ∩ B / (area(A) + area(B) - A ∩ B)
+        Args:
+            box_a: (np.array) Predicted bounding boxes,    Shape: [n_pred, 4]
+            box_b: (np.array) Ground Truth bounding boxes, Shape: [n_gt, 4]
+        Return:
+            jaccard overlap: (np.array) Shape: [n_pred, n_gt]
+        """
+        inter = self.intersect_area(boxes)
+        logging.debug(f'Obtained intersection of bboxes is {inter}')
+        union = self.union_area(boxes, inter)
+
+        logging.debug(f'Obtained union of bboxes is {union}')
+        return inter / union
 
     @property
     def lefts(self):
@@ -59,6 +120,10 @@ class BBoxesMixin:
     @property
     def height_centers(self):
         return (self.bboxes[..., 3] + self.bboxes[..., 1]) / 2
+
+    @property
+    def shape(self):
+        return self.bboxes.shape
 
 
 class BBox(object):
