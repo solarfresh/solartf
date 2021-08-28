@@ -65,6 +65,7 @@ class BBox(object):
     def __init__(self,
                  class_id,
                  bbox,
+                 class_map=None,
                  visibility=None,
                  blur_level=None,
                  region_level=None,
@@ -88,6 +89,7 @@ class BBox(object):
         """
         # todo: must be corrected from original json file
         self.class_id = class_id
+        self.class_map = class_map
         self.bbox = bbox
         self.visibility = visibility
         self.blur_level = blur_level
@@ -117,37 +119,6 @@ class BBox(object):
     @property
     def height(self):
         return self.bbox[2] - self.bbox[0]
-
-
-class BBoxes:
-    def __init__(self, bboxes: List[BBox], bbox_exclude=None):
-        if bbox_exclude is None:
-            self.bbox_exclude = {'class_id': [-1]}
-        else:
-            self.bbox_exclude = bbox_exclude
-
-        self._bboxes = bboxes
-        self._labels = np.array([bbox.class_id
-                                 for key, value in self.bbox_exclude.items()
-                                 for bbox in bboxes
-                                 if bbox.__getattribute__(key) not in value])
-        if self._labels.size > 0:
-            bbox_tensor = np.stack([[bbox.left, bbox.top, bbox.right, bbox.bottom]
-                                    for bbox in bboxes
-                                    for key, value in self.bbox_exclude.items()
-                                    if bbox.__getattribute__(key) not in value], axis=0)
-        else:
-            bbox_tensor = np.empty(shape=(0, 4))
-
-        self.bboxes_tensor = BBoxesTensor(bboxes=bbox_tensor)
-
-    @property
-    def labels(self):
-        return self._labels
-
-    @property
-    def bboxes(self):
-        return self._bboxes
 
 
 class BBoxesTensor(BBoxesMixin):

@@ -1,5 +1,6 @@
 import json
 from solartf.data.image.type import Image
+from solartf.data.bbox.type import BBox
 from solartf.data.keypoint.type import Keypoint
 
 
@@ -24,6 +25,11 @@ class LabelReader:
             if 'class-map' in self.annotation['metadata']:
                 self.class_map = self.annotation['metadata']['class-map']
 
+        if 'bboxes' in self.annotation['annotations']:
+            self.bboxes = self._get_bboxes()
+        else:
+            self.bboxes = []
+
         if 'keypoints' in self.annotation['annotations']:
             self.keypoints = self._get_keypoints()
         else:
@@ -35,3 +41,18 @@ class LabelReader:
                          x=kpt['x'],
                          y=kpt['y'],
                          class_map=self.class_map) for kpt in keypoints]
+
+    def _get_bboxes(self):
+        bboxes = self.annotation['annotations']['bboxes']
+        boxes = []
+        for bbox in bboxes:
+            bbox_obj = BBox(class_id=bbox['class_id'],
+                            bbox=(bbox['top'], bbox['left'], bbox['bottom'], bbox['right']))
+
+            for key in bbox.keys():
+                if bbox_obj.__getattribute__(key):
+                    bbox_obj.__setattr__(key, bbox[key])
+
+            boxes.append(bbox_obj)
+
+        return boxes
