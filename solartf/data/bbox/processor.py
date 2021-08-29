@@ -6,13 +6,11 @@ from .type import (BBox, BBoxesTensor)
 
 class BBoxProcessor:
     indexes: np.array
-    labels: np.array
-    bboxes_tensor: BBoxesTensor
+    _bboxes_tensor: np.array
     scale: Tuple
 
     def crop(self, xmin: int, ymin: int, xmax: int, ymax: int):
-        bboxes_tensor = self.bboxes_tensor.to_array(coord='corner').copy()
-        labels = self.labels.copy()
+        bboxes_tensor = self._bboxes_tensor.copy()
         indexes = self.indexes.copy()
         if bboxes_tensor.size < 1:
             return self
@@ -22,20 +20,18 @@ class BBoxProcessor:
         bboxes_tensor[bboxes_tensor[..., 2] > xmax, 2] = xmax
         bboxes_tensor[bboxes_tensor[..., 3] > ymax, 3] = ymax
         ignore_indexes = []
-        for index in range(labels.size):
+        for index in range(indexes.size):
             bbox = bboxes_tensor[index]
             if (bbox[..., 0] > bbox[..., 2]) or (bbox[..., 1] > bbox[..., 3]):
                 ignore_indexes.append(index)
 
-        self.bboxes_tensor = BBoxesTensor(np.delete(bboxes_tensor, ignore_indexes, axis=0), coord='corner')
-        self.labels = np.delete(labels, ignore_indexes)
         self.indexes = np.delete(indexes, ignore_indexes)
 
         return self
 
     def flip(self, image_shape, orientation=None):
         height, width, depth = image_shape
-        bboxes_tensor = self.bboxes_tensor.to_array(coord='corner').copy()
+        bboxes_tensor = self._bboxes_tensor.copy()
         if bboxes_tensor.size < 1:
             return self
 
@@ -49,7 +45,7 @@ class BBoxProcessor:
             bboxes_tensor[:, 2] = height - bboxes_tensor[:, 2]
             bboxes_tensor[:, [0, 2]] = bboxes_tensor[:, [2, 0]]
 
-        self.bboxes_tensor = BBoxesTensor(bboxes_tensor, coord='corner')
+        self._bboxes_tensor = bboxes_tensor
 
         return self
 
@@ -57,7 +53,7 @@ class BBoxProcessor:
         """
         :param transfer_matrix: the transformation matrix
         """
-        bboxes_tensor = self.bboxes_tensor.to_array(coord='corner').copy()
+        bboxes_tensor = self._bboxes_tensor.copy()
         if bboxes_tensor.size < 1:
             return self
 
@@ -69,12 +65,12 @@ class BBoxProcessor:
         left_top, right_bottom = np.split(affined_pts, 2, axis=0)
 
         bboxes_tensor = np.concatenate([left_top[:, [0, 1]], right_bottom[:, [0, 1]]], axis=1)
-        self.bboxes_tensor = BBoxesTensor(bboxes_tensor, coord='corner')
+        self._bboxes_tensor = bboxes_tensor
 
         return self
 
     def resize(self, scale: Tuple):
-        bboxes_tensor = self.bboxes_tensor.to_array(coord='corner').copy()
+        bboxes_tensor = self._bboxes_tensor.copy()
         if bboxes_tensor.size < 1:
             return self
 
@@ -82,7 +78,7 @@ class BBoxProcessor:
         bboxes_tensor[:, [1, 3]] = bboxes_tensor[:, [1, 3]] * scale[0] / self.scale[0]
         self.scale = scale
 
-        self.bboxes_tensor = BBoxesTensor(bboxes_tensor, coord='corner')
+        self._bboxes_tensor = bboxes_tensor
 
         return self
 
@@ -95,24 +91,20 @@ class BBoxeInput(BBoxProcessor):
             self.bbox_exclude = bbox_exclude
 
         self._bboxes = np.array(bboxes)
-        self.indexes = np.arange(len(self._bboxes))
         self.n_class = 0
-        if self.indexes.size > 0:
-            self.n_class = len(bboxes[0].class_map)
+        self._labels = np.array([bbox.class_id for bbox in bboxes])
+        self._bboxes_tensor = np.stack([[bbox.left, bbox.top, bbox.right, bbox.bottom] for bbox in bboxes])
 
-        self._labels = np.array([bbox.class_id
-                                 for key, value in self.bbox_exclude.items()
-                                 for bbox in bboxes
-                                 if bbox.__getattribute__(key) not in value])
-        if self._labels.size > 0:
-            bbox_tensor = np.stack([[bbox.left, bbox.top, bbox.right, bbox.bottom]
-                                    for bbox in bboxes
-                                    for key, value in self.bbox_exclude.items()
-                                    if bbox.__getattribute__(key) not in value], axis=0)
-        else:
-            bbox_tensor = np.empty(shape=(0, 4))
+        indexes = []
+        for idx, bbox in enumerate(bboxes):
+            if self.n_class < 1:
+                self.n_class = len(bboxes[0].class_map)
 
-        self.bboxes_tensor = BBoxesTensor(bboxes=bbox_tensor)
+            for key, value in self.bbox_exclude.items():
+                if bbox.__getattribute__(key) not in value:
+                    indexes.append(idx)
+
+        self.indexes = np.array(indexes)
         self.scale = (1., 1.)
 
     @property
@@ -122,3 +114,7 @@ class BBoxeInput(BBoxProcessor):
     @property
     def bboxes(self):
         return self._bboxes[self.indexes]
+
+    @property
+    def bboxes_tensor(self):
+        return BBoxesTensor(bboxes=self._bboxes_tensor[self.indexes])
