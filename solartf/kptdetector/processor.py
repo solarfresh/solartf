@@ -30,8 +30,8 @@ class KeypointAugmentation:
                                        image_type=image_type)
 
             if self.scale_ratio is not None:
-                image_input.rescale(ratio=self.scale_ratio)
-                kpt_input.resize(scale=image_input.scale)
+                transfer_matrix = image_input.rescale(ratio=self.scale_ratio)
+                kpt_input.affine(transfer_matrix=transfer_matrix)
 
             if self.flip_orientation is not None:
                 orientation = image_input.flip(orientation=self.flip_orientation)

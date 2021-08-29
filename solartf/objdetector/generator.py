@@ -16,7 +16,7 @@ class DetectDirectoryGenerator(KerasGeneratorBase):
                  image_type='bgr',
                  dataset_type='train',
                  in_memory=False,
-                 augment=False,
+                 augment=None,
                  processor=None,
                  bbox_exclude=None):
 
@@ -27,7 +27,6 @@ class DetectDirectoryGenerator(KerasGeneratorBase):
         self.dataset_type = dataset_type
         self.shuffle = shuffle
         self.batch_size = batch_size
-        self.augment = augment
         self.processor = processor
 
         self.gt_input_list = np.array([gt_input

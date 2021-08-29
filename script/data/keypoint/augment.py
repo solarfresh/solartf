@@ -16,27 +16,23 @@ class Config:
     H_SHIFT = (-10, 10)
     V_SHIFT = (-10, 10)
 
+    AUGMENT = [KeypointAugmentation(brightness_ratio=BRIGHTNESS_RATIO,
+                                    flip_orientation=FLIP_ORIENTATION,
+                                    scale_ratio=SCALE_RATIO,
+                                    degree=DEGREE,
+                                    h_shift=H_SHIFT,
+                                    v_shift=V_SHIFT)]
+
 
 if __name__ == '__main__':
     config = Config()
-    augment = KeypointAugmentation(brightness_ratio=config.BRIGHTNESS_RATIO,
-                                   flip_orientation=config.FLIP_ORIENTATION,
-                                   scale_ratio=config.SCALE_RATIO,
-                                   degree=config.DEGREE,
-                                   h_shift=config.H_SHIFT,
-                                   v_shift=config.V_SHIFT)
-
     for image_input_list, kpt_input_list in KeypointDirectoryGenerator(image_dir=config.IMAGE_DIR,
                                                                        label_dir=config.LABEL_DIR,
                                                                        image_shape=config.IMAGE_SHAPE,
                                                                        image_type=config.IMAGE_TYPE,
-                                                                       dataset_type='test'):
+                                                                       dataset_type='test',
+                                                                       augment=config.AUGMENT):
 
-        for image_input, kpt_input in zip(image_input_list, kpt_input_list):
-            kpt_input.resize(scale=image_input.scale)
-
-        augment.execute(image_input_list=image_input_list,
-                        kpt_input_list=kpt_input_list)
         for image_input, kpt_input in zip(image_input_list, kpt_input_list):
             image_array = image_input.image_array.copy()
             for kpt in kpt_input.points_tensor:

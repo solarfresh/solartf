@@ -137,7 +137,7 @@ class BBox(object):
                  truncation=None):
         """
         :param class_id: ID of the corresponding class
-        :param bbox: (top, left, bottom, right)
+        :param bbox: (left, top, right, bottom)
         :param visibility
                0 indicates "visible"
                1 indicates "partial-occlusion"
@@ -155,35 +155,59 @@ class BBox(object):
         # todo: must be corrected from original json file
         self.class_id = class_id
         self.class_map = class_map
-        self.bbox = bbox
+        self.bbox = np.array(bbox)
         self.visibility = visibility
         self.blur_level = blur_level
         self.region_level = region_level
         self.truncation = truncation
 
     @property
-    def top(self):
+    def left(self):
         return self.bbox[0]
 
-    @property
-    def left(self):
-        return self.bbox[1]
+    @left.setter
+    def left(self, value):
+        self.bbox[0] = value
 
     @property
-    def bottom(self):
-        return self.bbox[2]
+    def top(self):
+        return self.bbox[1]
+
+    @top.setter
+    def top(self, value):
+        self.bbox[1] = value
 
     @property
     def right(self):
+        return self.bbox[2]
+
+    @right.setter
+    def right(self, value):
+        self.bbox[2] = value
+
+    @property
+    def bottom(self):
         return self.bbox[3]
+
+    @bottom.setter
+    def bottom(self, value):
+        self.bbox[3] = value
 
     @property
     def width(self):
-        return self.bbox[3] - self.bbox[1]
+        return self.bbox[2] - self.bbox[0]
+
+    @width.setter
+    def width(self, value):
+        self.bbox[2] = self.bbox[0] + value
 
     @property
     def height(self):
-        return self.bbox[2] - self.bbox[0]
+        return self.bbox[3] - self.bbox[1]
+
+    @height.setter
+    def height(self, value):
+        self.bbox[3] = self.bbox[1] + value
 
 
 class BBoxesTensor(BBoxesMixin):

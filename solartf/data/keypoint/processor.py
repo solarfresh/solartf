@@ -48,7 +48,8 @@ class KeypointProcessor:
         """
         points_tensor = self.points_tensor.copy()
 
-        pts = np.expand_dims(points_tensor, 1)
+        pts = points_tensor[..., [0, 1]]
+        pts = np.expand_dims(pts, 1)
         self.points_tensor = np.squeeze(cv2.transform(pts, transfer_matrix))
 
         return self
@@ -56,8 +57,8 @@ class KeypointProcessor:
     def resize(self, scale: Tuple):
         points_tensor = self.points_tensor.copy()
 
-        points_tensor[..., 0] = points_tensor[..., 0] * scale[0] / self.scale[0]
-        points_tensor[..., 1] = points_tensor[..., 1] * scale[1] / self.scale[1]
+        points_tensor[..., 0] = points_tensor[..., 0] * scale[1] / self.scale[1]
+        points_tensor[..., 1] = points_tensor[..., 1] * scale[0] / self.scale[0]
         self.scale = scale
 
         self.points_tensor = points_tensor

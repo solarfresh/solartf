@@ -17,8 +17,8 @@ class LabelReader:
                                 image_shape=(image_size['height'], image_size['width'], image_size['depth']))
         for key, value in image_prop.items():
             key = key.replace('-', '_')
-            if self.image_prop.__getattribute__(key):
-                self.image_prop.__setattr__(key, value)
+            if hasattr(self.image_prop, key):
+                setattr(self.image_prop, key, value)
 
         self.class_map = None
         if 'metadata' in self.annotation:
@@ -47,11 +47,12 @@ class LabelReader:
         boxes = []
         for bbox in bboxes:
             bbox_obj = BBox(class_id=bbox['class_id'],
-                            bbox=(bbox['top'], bbox['left'], bbox['bottom'], bbox['right']))
+                            bbox=(bbox['left'], bbox['top'], bbox['right'], bbox['bottom']),
+                            class_map=self.class_map)
 
             for key in bbox.keys():
-                if bbox_obj.__getattribute__(key):
-                    bbox_obj.__setattr__(key, bbox[key])
+                if hasattr(bbox_obj, key):
+                    setattr(bbox_obj, key, bbox[key])
 
             boxes.append(bbox_obj)
 
