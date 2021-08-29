@@ -8,6 +8,7 @@ class BBoxProcessor:
     indexes: np.array
     labels: np.array
     bboxes_tensor: np.array
+    scale: Tuple
 
     def crop(self, xmin: int, ymin: int, xmax: int, ymax: int):
         bboxes_tensor = self.bboxes_tensor.copy()
@@ -68,8 +69,9 @@ class BBoxProcessor:
     def resize(self, scale: Tuple):
         bboxes_tensor = self.bboxes_tensor.copy()
 
-        bboxes_tensor[:, [0, 2]] = bboxes_tensor[:, [0, 2]] / scale[0]
-        bboxes_tensor[:, [1, 3]] = bboxes_tensor[:, [1, 3]] / scale[1]
+        bboxes_tensor[:, [0, 2]] = bboxes_tensor[:, [0, 2]] * scale[0] / self.scale[0]
+        bboxes_tensor[:, [1, 3]] = bboxes_tensor[:, [1, 3]] * scale[1] / self.scale[1]
+        self.scale = scale
 
         self.bboxes_tensor = bboxes_tensor
 

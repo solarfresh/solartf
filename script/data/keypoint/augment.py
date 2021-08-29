@@ -29,7 +29,11 @@ if __name__ == '__main__':
     for image_input_list, kpt_input_list in KeypointDirectoryGenerator(image_dir=config.IMAGE_DIR,
                                                                        label_dir=config.LABEL_DIR,
                                                                        image_shape=config.IMAGE_SHAPE,
-                                                                       image_type=config.IMAGE_TYPE,):
+                                                                       image_type=config.IMAGE_TYPE,
+                                                                       dataset_type='test'):
+
+        for image_input, kpt_input in zip(image_input_list, kpt_input_list):
+            kpt_input.resize(scale=image_input.scale)
 
         augment.execute(image_input_list=image_input_list,
                         kpt_input_list=kpt_input_list)
