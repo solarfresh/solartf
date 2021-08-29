@@ -1,10 +1,55 @@
 import numpy as np
 import tensorflow as tf
-from solartf.core.output import OutputBase
+from typing import List
 from solartf.data.bbox.type import BBoxesTensor
 
 
-class BBoxOutput(OutputBase):
+class BBoxLabeler:
+    def __init__(self, anchor_tensor: BBoxesTensor):
+        """
+        return positive and negative masks along the anchor axis
+        """
+        self.anchor_tensor = anchor_tensor
+
+    def get_bbox_label_mask(self, bbox_tensor: np.ndarray, method, th_neg=.3, th_pos=.5):
+        iou_scores = self.anchor_tensor.jaccard(bbox_tensor)
+        if method == 'threshold':
+            return self._select_by_threshold(iou_scores, th_neg=th_neg, th_pos=th_pos)
+        elif method == 'max':
+            return self._select_by_max(iou_scores, th_neg=th_neg)
+        else:
+            raise ValueError(f'method {method} is not supported...')
+
+    def _select_by_max(self, iou_scores, th_neg=.3):
+        gt_postive_index = iou_scores.argmax(axis=1)
+        gt_postive_iou = np.zeros_like(iou_scores)
+        for index, gt_positive_i in enumerate(gt_postive_index):
+            gt_postive_iou[index, gt_positive_i] = iou_scores[index, gt_positive_i]
+
+        anchor_positive_index = gt_postive_iou.argmax(axis=0)
+        pos_anchor_mask = np.zeros_like(gt_postive_iou)
+        for index, anchor_positive_i in enumerate(anchor_positive_index):
+            pos_anchor_mask[anchor_positive_i, index] = 1
+
+        neg_anchor_mask = np.where(((iou_scores > th_neg) + pos_anchor_mask) > 0, 0, 1)
+        neg_anchor_mask = neg_anchor_mask.sum(axis=1) == iou_scores.shape[1]
+
+        pos_bbox_index = pos_anchor_mask.argmax(axis=1)
+        pos_anchor_mask = pos_anchor_mask.sum(axis=1) > 0
+
+        return neg_anchor_mask, pos_anchor_mask, pos_bbox_index
+
+    def _select_by_threshold(self, iou_scores, th_neg=.3, th_pos=.5):
+        max_iou_mask = iou_scores.max(axis=1)
+        bbox_match_index = iou_scores.argmax(axis=1)
+
+        pos_anchor_mask = max_iou_mask >= th_pos
+        neg_anchor_mask = max_iou_mask < th_neg
+
+        return neg_anchor_mask, pos_anchor_mask, bbox_match_index
+
+
+class BBoxOutput:
     def __init__(self, method='iou', normalize=False, package='numpy'):
         # todo: AnchorBox layer now is fixed in corner coordinates now, and we will modify it to be more flexible
         self.method = method
@@ -17,11 +62,7 @@ class BBoxOutput(OutputBase):
         if self.package == 'tensorflow':
             self._concat = tf.concat
 
-    def encoder(self, outputs: np.array):
-        bboxes = BBoxesTensor(outputs[..., :4], method=self.package)
-        anchors = BBoxesTensor(outputs[..., 4:8], method=self.package)
-        variance = outputs[..., 8:]
-
+    def encoder(self, bboxes: BBoxesTensor, anchors: BBoxesTensor, variance: np.array):
         if self.method == 'iou':
             return self._iou_encoder(bboxes=bboxes, anchors=anchors, variance=variance)
         elif self.method == 'centroid':

@@ -1,9 +1,9 @@
 import tensorflow as tf
 from tensorflow.keras.models import Model
 from tensorflow.keras import backend as K
-from tensorflow.keras.layers import (Activation, Add, AveragePooling2D, BatchNormalization,
-                                     Conv2D, Conv2DTranspose, Dense, Dropout, Flatten,
-                                     ZeroPadding2D)
+from tensorflow.keras.layers import (Activation, Add, BatchNormalization, Conv2D,
+                                     UpSampling2D, Dense, Dropout, Flatten,)
+from tensorflow.keras.regularizers import l2
 from .activation import (hard_swish, relu)
 from .block import (inverted_res_block, resnet_block)
 from .layer import GaussianBlur
@@ -48,63 +48,41 @@ class LeNet5(tf.keras.Model):
 class FPN(tf.keras.Model):
     def __init__(self,
                  n_filters=40,
-                 forward='up',
                  prefix=None,
                  kernel_initializer='he_normal',
                  l2_regularization=0.0005,
                  use_bias=True):
         super(FPN, self).__init__()
         self.n_filters = n_filters
-        self.forward = forward
         self.kernel_initializer = kernel_initializer
         self.l2_reg = l2_regularization
         self.use_bias = use_bias
-        if prefix is not None:
-            self.prefix = prefix
-        elif self.forward == 'up':
-            self.prefix = 'fpn_up'
-        elif self.forward == 'down':
-            self.prefix = 'fpn_down'
-        else:
-            raise ValueError(f'The argument forward {self.forward} is not implemented...')
+        if prefix is None:
+            self.prefix = 'fpn'
 
     def call(self, inputs, training=None, mask=None):
         n_features = len(inputs)
         feature_map_list = []
         for index in range(n_features):
             if index == 0:
-                p = Conv2D(self.n_filters, (1, 1), name=f'{self.prefix}_c{index}_p{index}')(inputs[index])
+                p = Conv2D(self.n_filters, (1, 1),
+                           kernel_regularizer=l2(self.l2_reg),
+                           name=f'{self.prefix}_c{index}_p{index}')(inputs[index])
             else:
                 p = Add(name=f'{self.prefix}_p{index}_add')([
-                    self._forward_conv(p, index=index),
-                    Conv2D(self.n_filters, (1, 1), padding='same', name=f'{self.prefix}_c{index}_p{index}')(inputs[index])
+                    UpSampling2D(2)(p),
+                    Conv2D(self.n_filters, (1, 1),
+                           padding='same',
+                           kernel_regularizer=l2(self.l2_reg),
+                           name=f'{self.prefix}_c{index}_p{index}')(inputs[index])
                 ])
 
-            feature_map_list.append(Conv2D(self.n_filters, (3, 3), padding="SAME", name=f'{self.prefix}_p_conv_{index}')(p))
+            feature_map_list.append(Conv2D(self.n_filters, (3, 3),
+                                           padding="SAME",
+                                           kernel_regularizer=l2(self.l2_reg),
+                                           name=f'{self.prefix}_p_conv_{index}')(p))
 
         return feature_map_list
-
-    def _forward_conv(self, x, index):
-        if self.forward == 'up':
-            return Conv2DTranspose(filters=self.n_filters,
-                                   kernel_size=(3, 3),
-                                   strides=(2, 2),
-                                   padding='same',
-                                   kernel_initializer=self.kernel_initializer,
-                                   # kernel_regularizer=l2(self.l2_reg),
-                                   name=f'{self.prefix}_up_p{index}',
-                                   use_bias=self.use_bias)(x)
-        elif self.forward == 'down':
-            return Conv2D(filters=self.n_filters,
-                          kernel_size=(3, 3),
-                          strides=(2, 2),
-                          padding='same',
-                          kernel_initializer=self.kernel_initializer,
-                          # kernel_regularizer=l2(self.l2_reg),
-                          name=f'{self.prefix}_p{index}',
-                          use_bias=self.use_bias)(x)
-        else:
-            raise NotImplementedError(f'forward {self.forward} is not implemented...')
 
     def get_config(self):
         return super(FPN, self).get_config()
@@ -203,108 +181,6 @@ class MobileNetV3(tf.keras.Model):
 
     def get_config(self):
         return super(MobileNetV3, self).get_config()
-
-
-class MobileNetSingleScaleDetectionNeck(tf.keras.Model):
-    def __init__(self,
-                 l2_regularization=0.0005,
-                 momentum=0.99,
-                 epsilon=0.00001):
-        super(MobileNetSingleScaleDetectionNeck, self).__init__()
-        self.l2_reg = l2_regularization
-        self.momentum = momentum
-        self.epsilon = epsilon
-
-    def call(self, inputs, training=None, mask=None):
-        conv_1 = self.conv(inputs, filter_nb=40, name='1')
-        conv_2 = self.conv(conv_1, filter_nb=128, name='2')
-        conv_3 = self.conv(conv_2, filter_nb=128, name='3')
-        conv_4 = self.conv(conv_3, filter_nb=64, name='4')
-
-        return conv_4
-
-    def conv(self,
-             inputs,
-             filter_nb,
-             kernel_initializer='he_normal',
-             use_bias=True,
-             name=''):
-
-        conv_1 = Conv2D(filter_nb, (1, 1),
-                        padding='same',
-                        kernel_initializer=kernel_initializer,
-                        name=f'ssd_neck_conv_{name}_1',
-                        use_bias=use_bias)(inputs)
-        conv_1 = BatchNormalization(momentum=self.momentum,
-                                    epsilon=self.epsilon,
-                                    name=f'ssd_neck_conv/bn_{name}_1')(conv_1)
-        conv_1 = Activation(hard_swish, name=f'ssd_neck_relu_{name}_1')(conv_1)
-        conv_1 = ZeroPadding2D(padding=((1, 1), (1, 1)), name=f'ssd_neck_zero_padding_{name}')(conv_1)
-
-        conv_2 = Conv2D(2 * filter_nb, (3, 3),
-                        strides=(2, 2),
-                        padding='valid',
-                        kernel_initializer=kernel_initializer,
-                        name=f'ssd_neck_conv_{name}_2',
-                        use_bias=use_bias)(conv_1)
-        conv_2 = BatchNormalization(momentum=self.momentum,
-                                    epsilon=self.epsilon,
-                                    name=f'ssd_neck_conv/bn_{name}_2')(conv_2)
-        conv_2 = Activation(hard_swish, name=f'ssd_neck_relu_{name}_2')(conv_2)
-        return conv_2
-
-    def get_config(self):
-        return super(MobileNetSingleScaleDetectionNeck, self).get_config()
-
-
-class SSDNeck(tf.keras.Model):
-    def __init__(self,
-                 neck_filter_nb=64,
-                 fpn_filters_nb=64,
-                 momentum=0.99,
-                 epsilon=0.00001):
-        super(SSDNeck, self).__init__()
-        self.neck_filter_nb = neck_filter_nb
-        self.momentum = momentum
-        self.epsilon = epsilon
-        self.fpn_up = FPN(forward='up', n_filters=fpn_filters_nb)
-        self.fpn_down = FPN(forward='down', n_filters=fpn_filters_nb)
-
-    def call(self, inputs, training=None, mask=None):
-        return self.fpn_up.call([inputs[index] for index in range(len(inputs) - 1, -1, -1)])
-
-    def conv(self,
-             inputs,
-             filter_nb,
-             kernel_initializer='he_normal',
-             use_bias=True,
-             name=''):
-
-        conv_1 = Conv2D(filter_nb, (1, 1),
-                        padding='same',
-                        kernel_initializer=kernel_initializer,
-                        name=f'ssd_neck_conv_{name}_1',
-                        use_bias=use_bias)(inputs)
-        conv_1 = BatchNormalization(momentum=self.momentum,
-                                    epsilon=self.epsilon,
-                                    name=f'ssd_neck_conv/bn_{name}_1')(conv_1)
-        conv_1 = Activation(hard_swish, name=f'ssd_neck_relu_{name}_1')(conv_1)
-        conv_1 = ZeroPadding2D(padding=((1, 1), (1, 1)), name=f'ssd_neck_zero_padding_{name}')(conv_1)
-
-        conv_2 = Conv2D(2 * filter_nb, (3, 3),
-                        strides=(2, 2),
-                        padding='valid',
-                        kernel_initializer=kernel_initializer,
-                        name=f'ssd_neck_conv_{name}_2',
-                        use_bias=use_bias)(conv_1)
-        conv_2 = BatchNormalization(momentum=self.momentum,
-                                    epsilon=self.epsilon,
-                                    name=f'ssd_neck_conv/bn_{name}_2')(conv_2)
-        conv_2 = Activation(hard_swish, name=f'ssd_neck_relu_{name}_2')(conv_2)
-        return conv_2
-
-    def get_config(self):
-        return super(SSDNeck, self).get_config()
 
 
 class ResNetV2(tf.keras.Model):
