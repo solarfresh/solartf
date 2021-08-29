@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-from typing import (List, Tuple)
+from typing import (Any, List, Tuple)
 from .type import Keypoint
 
 
@@ -8,6 +8,7 @@ class KeypointProcessor:
     indexes: np.array
     labels: np.array
     points_tensor: np.array
+    scale: Tuple
 
     def crop(self, xmin: int, ymin: int, xmax: int, ymax: int):
         points_tensor = self.points_tensor.copy()
@@ -47,7 +48,8 @@ class KeypointProcessor:
         """
         points_tensor = self.points_tensor.copy()
 
-        pts = np.expand_dims(points_tensor, 1)
+        pts = points_tensor[..., [0, 1]]
+        pts = np.expand_dims(pts, 1)
         self.points_tensor = np.squeeze(cv2.transform(pts, transfer_matrix))
 
         return self
@@ -55,8 +57,9 @@ class KeypointProcessor:
     def resize(self, scale: Tuple):
         points_tensor = self.points_tensor.copy()
 
-        points_tensor[..., 0] = points_tensor[..., 0] / scale[0]
-        points_tensor[..., 1] = points_tensor[..., 1] / scale[1]
+        points_tensor[..., 0] = points_tensor[..., 0] * scale[1] / self.scale[1]
+        points_tensor[..., 1] = points_tensor[..., 1] * scale[0] / self.scale[0]
+        self.scale = scale
 
         self.points_tensor = points_tensor
 
@@ -76,6 +79,7 @@ class KeypointInput(KeypointProcessor):
             self.labels[kpts.class_id] = kpts.visible
 
         self.points_tensor = np.array([[kp.point.x, kp.point.y] for kp in keypoints])
+        self.scale = (1., 1.)
 
     @property
     def keypoints(self):

@@ -159,11 +159,11 @@ class ImageProcessor:
 
         if not keep_aspect_ratio:
             self.image_array = cv2.resize(image_array, size)
-            self.scale = (size[0] / w, size[1] / h)
+            self.scale = (size[0] * self.scale[0] / w, size[1] * self.scale[1] / h)
         else:
             scale = min(size[1] / h, size[0] / w)
             self.image_array = cv2.resize(image_array, None, fx=scale, fy=scale)
-            self.scale = (scale, scale)
+            self.scale = (scale * self.scale[0], scale * self.scale[1])
 
         self.image_shape = self.image_array.shape
         return self
@@ -194,6 +194,7 @@ class ImageProcessor:
         else:
             factor = ratio
 
+        self.scale = tuple([self.scale[idx] * factor for idx in range(2)])
         M = cv2.getRotationMatrix2D((width / 2, height / 2), 0, factor)
         self.image_array = cv2.warpAffine(self.image_array.copy(), M, (width, height))
         return M
@@ -283,7 +284,7 @@ class ImageInput(ImageProcessor):
             self.image_array = cv2.cvtColor(self.image_array, cv2.COLOR_BGR2HSV)
 
         if self.image_shape is not None:
-            self.scale = tuple(self.image_array.shape[index] / image_shape[index] for index in range(2))
+            self.scale = tuple(self.image_shape[index] / self.image_array.shape[index] for index in range(2))
             self.image_array = cv2.resize(self.image_array, self.image_shape[:2])
 
     def convert(self, image_type):

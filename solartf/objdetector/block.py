@@ -1,4 +1,4 @@
-from tensorflow.keras.layers import Conv2D
+from tensorflow.keras.layers import (Conv2D, Reshape)
 
 
 def anchor_detect_head_block(inputs,
