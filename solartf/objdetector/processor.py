@@ -21,52 +21,60 @@ class MosaicComponent:
 
 
 class MosaicImageAugmentation:
-    def __init__(self, n_slice, image_shape):
+    def __init__(self, n_slice):
         """
         :param n_slice: the number of images will be sliced along an axis,
         and the total sliced images will be n_slice^2
         :param image_shape: (height, width), a shape of mixed images
         """
         self.n_slice = n_slice
-        if len(image_shape) >= 3:
-            self.height, self.width, self.depth = image_shape[:3]
-        else:
-            raise ValueError(f'The size of image_shape must be equal or larger than 2...')
+        self.width = 0
+        self.height = 0
+        self.class_map = {}
 
     def execute(self,
                 image_input_list: List[ImageInput],
-                detection_input_list: List[DetectionInput]):
+                bboxes_input_list: List[BBoxeInput]):
 
         n_batch = len(image_input_list)
-        if not n_batch == len(detection_input_list):
+        if not n_batch == len(bboxes_input_list):
             raise ValueError(f'The sizes of image_input_list and detection_gt_input must be equal...')
 
-        mosaic_components = self.gen_mosaic_components(image_input_list, detection_input_list)
+        if n_batch > 0:
+            image_shape = image_input_list[0].image_shape
+            self.height, self.width, _ = image_shape
+        else:
+            raise ValueError(f'The batch size must be equal or larger than 1...')
+
+        mosaic_components = self.gen_mosaic_components(image_input_list, bboxes_input_list)
         mosaic_images, mosaic_bboxes, mosaic_labels = self.gen_mosaic_images(
-            shape=(n_batch, self.height, self.width, self.depth),
+            shape=(n_batch,) + image_shape,
             components=mosaic_components)
 
         for image_input, mosaic_image in zip(image_input_list, mosaic_images):
             image_input.image_array = mosaic_image
 
-        bbox_list = []
-        for detection_input, mosaic_bbox, mosaic_label in zip(detection_input_list, mosaic_bboxes, mosaic_labels):
+        for bboxes_input, mosaic_bbox, mosaic_label in zip(bboxes_input_list, mosaic_bboxes, mosaic_labels):
+            bbox_list = []
             for label, bbox in zip(mosaic_label, mosaic_bbox):
-                bbox_list.append(BBox(class_id=label, bbox=bbox))
+                bbox_list.append(BBox(class_id=label, bbox=bbox, class_map=self.class_map))
 
-            detection_input.bboxes_input = BBoxeInput(bbox_list)
+            bboxes_input.__init__(bbox_list, bbox_exclude=bboxes_input.bbox_exclude)
 
     def gen_mosaic_components(self,
                               image_input_list: List[ImageInput],
-                              detection_input_list: List[DetectionInput]):
+                              bboxes_input_list: List[BBoxeInput]):
 
-        x_intersect = np.random.randint(0, self.width - 1, self.n_slice - 1)
-        y_intersect = np.random.randint(0, self.height - 1, self.n_slice - 1)
+        x_intersect = np.sort(np.random.randint(0, self.width - 1, self.n_slice - 1))
+        y_intersect = np.sort(np.random.randint(0, self.height - 1, self.n_slice - 1))
         x_intersect = np.concatenate([[0], x_intersect, [self.width]])
         y_intersect = np.concatenate([[0], y_intersect, [self.height]])
 
         mosaic_components = []
-        for image_input, detection_input in zip(image_input_list, detection_input_list):
+        for image_input, bboxes_input in zip(image_input_list, bboxes_input_list):
+            if len(self.class_map) < 1 and len(bboxes_input.bboxes) > 0:
+                self.class_map = bboxes_input.bboxes[0].class_map
+
             for xindex in range(self.n_slice):
                 for yindex in range(self.n_slice):
                     xmin = x_intersect[xindex]
@@ -86,28 +94,30 @@ class MosaicImageAugmentation:
 
                     section_index = yindex + xindex * self.n_slice
 
-                    image_input = copy.deepcopy(image_input)
-                    detection_input = copy.deepcopy(detection_input)
+                    cropped_image_input = copy.deepcopy(image_input)
+                    cropped_bboxes_input = copy.deepcopy(bboxes_input)
 
-                    image_array = image_input.crop(xmin=x_anchor,
-                                                   ymin=y_anchor,
-                                                   xmax=x_anchor + xmax - xmin,
-                                                   ymax=y_anchor + ymax - ymin)
+                    cropped_image_input.crop(xmin=x_anchor,
+                                             ymin=y_anchor,
+                                             xmax=x_anchor + xmax - xmin,
+                                             ymax=y_anchor + ymax - ymin)
 
-                    detection_input.bboxes_input.crop(xmin=x_anchor,
-                                                      ymin=y_anchor,
-                                                      xmax=x_anchor + xmax - xmin,
-                                                      ymax=y_anchor + ymax - ymin)
-                    for bbox in detection_input.bboxes_input.bboxes_tensor:
+                    cropped_bboxes_input.crop(xmin=x_anchor,
+                                              ymin=y_anchor,
+                                              xmax=x_anchor + xmax - xmin,
+                                              ymax=y_anchor + ymax - ymin)
+
+                    bboxes = cropped_bboxes_input.bboxes_tensor.to_array(coord='corner').copy()
+                    for bbox in bboxes:
                         bbox[..., 0] = bbox[..., 0] - x_anchor + xmin
                         bbox[..., 1] = bbox[..., 1] - y_anchor + ymin
                         bbox[..., 2] = bbox[..., 2] - x_anchor + xmin
                         bbox[..., 3] = bbox[..., 3] - y_anchor + ymin
 
                     mosaic_components.append(MosaicComponent(section_index=section_index,
-                                                             image_array=image_array,
-                                                             bboxes=detection_input.bboxes_input.bboxes_tensor.copy(),
-                                                             labels=detection_input.bboxes_input.labels.copy(),
+                                                             image_array=cropped_image_input.image_array.copy(),
+                                                             bboxes=bboxes,
+                                                             labels=cropped_bboxes_input.labels.copy(),
                                                              xmin=xmin,
                                                              ymin=ymin,
                                                              xmax=xmax,
@@ -117,12 +127,12 @@ class MosaicImageAugmentation:
 
     def gen_mosaic_images(self, shape, components):
         section_map = {index: 0 for index in range(self.n_slice ** 2)}
-        mosaic_images = np.zeros(shape=shape)
+        mosaic_images = np.zeros(shape=shape).astype(np.uint8)
         mosaic_bboxes = [[] for _ in range(shape[0])]
         mosaic_labels = [[] for _ in range(shape[0])]
         for component in components:
             batch_index = section_map[component.section_index]
-            mosaic_images[batch_index, component.ymin:component.ymax, component.xmin:component.xmax, :] \
+            mosaic_images[batch_index, component.ymin:component.ymax, component.xmin:component.xmax] \
                 = component.image_array
             if component.bboxes.any():
                 mosaic_bboxes[batch_index].append(component.bboxes)

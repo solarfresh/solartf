@@ -21,10 +21,11 @@ class BBoxProcessor:
         bboxes_tensor[bboxes_tensor[..., 3] > ymax, 3] = ymax
         ignore_indexes = []
         for index in range(indexes.size):
-            bbox = bboxes_tensor[index]
+            bbox = bboxes_tensor[indexes[index]]
             if (bbox[..., 0] > bbox[..., 2]) or (bbox[..., 1] > bbox[..., 3]):
                 ignore_indexes.append(index)
 
+        self._bboxes_tensor = bboxes_tensor
         self.indexes = np.delete(indexes, ignore_indexes)
 
         return self

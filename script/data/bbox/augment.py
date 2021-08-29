@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-from solartf.objdetector.processor import BBoxesAugmentation
+from solartf.objdetector.processor import (BBoxesAugmentation, MosaicImageAugmentation)
 from solartf.objdetector.generator import DetectDirectoryGenerator
 
 
@@ -17,12 +17,15 @@ class Config:
     H_SHIFT = (-10, 10)
     V_SHIFT = (-10, 10)
 
-    AUGMENT = [BBoxesAugmentation(brightness_ratio=BRIGHTNESS_RATIO,
-                                  flip_orientation=FLIP_ORIENTATION,
-                                  scale_ratio=SCALE_RATIO,
-                                  degree=DEGREE,
-                                  h_shift=H_SHIFT,
-                                  v_shift=V_SHIFT)]
+    AUGMENT = [
+        MosaicImageAugmentation(n_slice=2),
+        BBoxesAugmentation(brightness_ratio=BRIGHTNESS_RATIO,
+                           flip_orientation=FLIP_ORIENTATION,
+                           scale_ratio=SCALE_RATIO,
+                           degree=DEGREE,
+                           h_shift=H_SHIFT,
+                           v_shift=V_SHIFT)
+    ]
 
 
 if __name__ == '__main__':
@@ -32,7 +35,8 @@ if __name__ == '__main__':
                                                                       image_shape=config.IMAGE_SHAPE,
                                                                       image_type=config.IMAGE_TYPE,
                                                                       dataset_type='test',
-                                                                      augment=config.AUGMENT):
+                                                                      augment=config.AUGMENT,
+                                                                      bbox_exclude={'region_level': ['visualable', 'full']}):
 
         for image_input, bbox_input in zip(image_input_list, bbox_input_list):
             image_array = image_input.image_array.copy()
@@ -44,7 +48,7 @@ if __name__ == '__main__':
                               (0, 0, 255), 3)
 
             cv2.imshow('Augment', image_array)
+            key = cv2.waitKey(5000)
 
-        key = cv2.waitKey(5000)
         if key == ord('q') or key == 27:
             break
