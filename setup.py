@@ -3,7 +3,7 @@ from distutils.core import setup
 
 setup(
     name='solartf',
-    version='0.0.2',
+    version='0.0.3',
     packages=setuptools.find_packages(),
     install_requires=[
         'opencv-python==4.5.3.56',
