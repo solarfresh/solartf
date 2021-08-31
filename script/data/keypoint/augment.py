@@ -1,5 +1,5 @@
 import cv2
-from solartf.kptdetector.processor import KeypointAugmentation
+from solartf.kptdetector.processor import (KeypointAugmentation, RandomOcclusion)
 from solartf.kptdetector.generator import KeypointDirectoryGenerator
 
 
@@ -7,7 +7,7 @@ class Config:
     IMAGE_DIR = '/Users/huangshangyu/Downloads/experiment/facekpt/image'
     LABEL_DIR = '/Users/huangshangyu/Downloads/experiment/facekpt/annotation'
     IMAGE_TYPE = 'bgr'
-    IMAGE_SHAPE = (500, 500, 3)
+    IMAGE_SHAPE = (640, 640, 3)
 
     BRIGHTNESS_RATIO = (.5, 2.)
     FLIP_ORIENTATION = 'horizontal_random'
@@ -16,12 +16,17 @@ class Config:
     H_SHIFT = (-10, 10)
     V_SHIFT = (-10, 10)
 
-    AUGMENT = [KeypointAugmentation(brightness_ratio=BRIGHTNESS_RATIO,
-                                    flip_orientation=FLIP_ORIENTATION,
-                                    scale_ratio=SCALE_RATIO,
-                                    degree=DEGREE,
-                                    h_shift=H_SHIFT,
-                                    v_shift=V_SHIFT)]
+    AUGMENT = [
+        RandomOcclusion(radius=(40, 60),
+                        width=(40, 60),
+                        height=(40, 60)),
+        KeypointAugmentation(brightness_ratio=BRIGHTNESS_RATIO,
+                             flip_orientation=FLIP_ORIENTATION,
+                             scale_ratio=SCALE_RATIO,
+                             degree=DEGREE,
+                             h_shift=H_SHIFT,
+                             v_shift=V_SHIFT)
+    ]
 
 
 if __name__ == '__main__':
@@ -35,8 +40,10 @@ if __name__ == '__main__':
 
         for image_input, kpt_input in zip(image_input_list, kpt_input_list):
             image_array = image_input.image_array.copy()
-            for kpt in kpt_input.points_tensor:
-                image_array = cv2.circle(image_array, tuple(kpt), radius=0, color=(0, 0, 255), thickness=10)
+            for idx in kpt_input.indexes:
+                kpt = kpt_input.points_tensor[idx]
+                if kpt_input.labels[idx]:
+                    image_array = cv2.circle(image_array, tuple(kpt), radius=0, color=(0, 0, 255), thickness=10)
 
             cv2.imshow('Augment', image_array)
 

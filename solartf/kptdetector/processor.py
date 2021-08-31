@@ -1,6 +1,62 @@
+import cv2
+import numpy as np
 from typing import List
 from solartf.data.image.processor import ImageInput
 from solartf.data.keypoint.processor import KeypointInput
+
+
+class RandomOcclusion:
+    def __init__(self, shape=None, **kwargs):
+        """
+        :param shape: circle or rectangle. one of both will be selected randomly if it is None as default
+        """
+        self.shape = shape
+
+        self.default_attr = {'radius': None, 'width': None, 'height': None}
+        self.default_attr.update(kwargs)
+
+    def execute(self,
+                image_input_list: List[ImageInput],
+                kpt_input_list: List[KeypointInput]):
+
+        for image_input, kpt_input in zip(image_input_list, kpt_input_list):
+            image_array = image_input.image_array.copy()
+            for idx in kpt_input.indexes:
+                center = kpt_input.points_tensor[idx]
+                if np.random.randint(0, 2):
+                    continue
+
+                self._update_random_attr()
+                image_array = self._occluding(image_array, center)
+                kpt_input.labels[idx] = 0
+
+            image_input.image_array = image_array
+
+    def _occluding(self, image_array, center):
+        mask = np.zeros_like(image_array, dtype=np.uint8)
+        if self.shape == 'circle':
+            cv2.circle(mask, center, self.radius, (255, 255, 255), -1)
+        elif self.shape == 'rectangle':
+            xmin = center[0] - self.width // 2
+            xmax = center[0] + self.width // 2
+            ymin = center[1] - self.height // 2
+            ymax = center[1] + self.height // 2
+            cv2.rectangle(mask, (xmin, ymin), (xmax, ymax), (255, 255, 255), -1)
+        else:
+            raise ValueError(f'It does not support the shape {self.shape}...')
+
+        return np.where(mask, np.random.randint(0, 256, size=image_array.shape).astype(np.uint8), image_array)
+
+    def _update_random_attr(self):
+        self.shape = 'circle' if np.random.random_integers(0, 1) else 'rectangle'
+        for key, value in self.default_attr.items():
+            if key not in ['radius', 'width', 'height']:
+                continue
+
+            if value is None:
+                self.__setattr__(key, np.random.randint(10, 20))
+            else:
+                self.__setattr__(key, np.random.randint(value[0], value[1]))
 
 
 class KeypointAugmentation:
