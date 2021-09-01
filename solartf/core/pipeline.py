@@ -31,7 +31,7 @@ class TFPipelineBase:
             'test': None
         }
 
-    def inference(self):
+    def inference(self, *args, **kwargs):
         raise NotImplementedError
 
     def train(self):

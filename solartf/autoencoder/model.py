@@ -28,7 +28,7 @@ class CVAE(TFModelBase):
         batch_image_input = np.stack([image_input.image_array
                                       for image_input in image_input_list], axis=0)
 
-        batch_decoded_image = np.stack([image_input.image_array.astype(np.float32) / 255.
+        batch_decoded_image = np.stack([image_input.image_array.copy().astype(np.float32) / 255.
                                         for image_input in image_input_list], axis=0)
 
         return batch_image_input, {
@@ -90,6 +90,7 @@ class CVAE(TFModelBase):
                                             strides=1,
                                             padding='same',
                                             name='decoded_image')(x)
+        x = tf.nn.leaky_relu(x)
 
         return Model(latent, x)
 

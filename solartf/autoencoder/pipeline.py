@@ -1,10 +1,22 @@
+import os
+import numpy as np
 from solartf.core.generator import ImageDirectoryGenerator
 from solartf.core.pipeline import TFPipelineBase
 
 
 class CVAEPipeline(TFPipelineBase):
-    def inference(self, output_shape=None, dataset_type='test'):
-        raise NotImplementedError
+    def inference(self, save_dir, dataset_type='test'):
+        self.load_model().load_dataset()
+        for image_input_list in self.dataset[dataset_type]:
+            image_arrays = np.stack([image_input.image_array
+                                     for image_input in image_input_list], axis=0)
+            predict_results = self.model.predict(image_arrays)
+            decoded_images = predict_results['decoded_image']
+            logpzs = predict_results['logpz']
+            for image_input, decoded_image in zip(image_input_list, decoded_images):
+                image_path = image_input.image_path
+                fname = os.path.basename(image_path)
+                yield fname, (decoded_image * 255.).astype(np.uint8)
 
     def load_dataset(self):
         if self.model is None:
