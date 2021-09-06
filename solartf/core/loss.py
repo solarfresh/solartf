@@ -131,7 +131,7 @@ class MonteCarloEstimateLoss:
         cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(
             labels=y_true, logits=y_pred
         )
-        logpx_z = -tf.reduce_mean(cross_entropy, axis=[1, 2, 3])
+        logpx_z = -tf.reduce_sum(cross_entropy, axis=[1, 2, 3])
         return -tf.reduce_mean(logpx_z)
 
     def logpz_loss(self, y_true, y_pred):
