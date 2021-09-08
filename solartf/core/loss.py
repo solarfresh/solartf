@@ -1,6 +1,7 @@
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras import backend as K
+from tensorflow.keras.losses import binary_crossentropy
 from solartf.data.bbox.type import BBoxesTensor
 from .util import tf_bbox_intersection
 
@@ -128,11 +129,7 @@ class IoUFamilyLoss:
 class MonteCarloEstimateLoss:
 
     def logpx_loss(self, y_true, y_pred):
-        cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(
-            labels=y_true, logits=y_pred
-        )
-        logpx_z = -tf.reduce_sum(cross_entropy, axis=[1, 2, 3])
-        return -tf.reduce_mean(logpx_z)
+        return binary_crossentropy(y_true, y_pred)
 
     def logpz_loss(self, y_true, y_pred):
         z, mean, logvar = tf.split(y_pred, num_or_size_splits=3, axis=-1)

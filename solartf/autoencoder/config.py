@@ -27,7 +27,7 @@ class CVAEConfig:
         'decoded_image': mc_loss.logpx_loss,
         'logpz': mc_loss.logpz_loss
     }
-    TRAIN_LOSS_WEIGHTS = None
+    TRAIN_LOSS_WEIGHTS = {'decoded_image': 500, 'logpz': 1}
 
     # TRAIN_MODEL_CHECKPOINT_PATH = '/home/data/models/ssd_xentropy_diou_epoch-{epoch:05d}' \
     #                               + ''.join([f'_{key}-{{{key}:.4f}}_val_{key}-{{val_{key}:.4f}}'

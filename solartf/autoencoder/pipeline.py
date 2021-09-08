@@ -5,7 +5,7 @@ from solartf.core.pipeline import TFPipelineBase
 
 
 class CVAEPipeline(TFPipelineBase):
-    def inference(self, save_dir, dataset_type='test'):
+    def inference(self, dataset_type='test'):
         self.load_model().load_dataset()
         for image_input_list in self.dataset[dataset_type]:
             image_arrays = np.stack([image_input.image_array
