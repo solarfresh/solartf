@@ -78,6 +78,27 @@ def smooth_L1_loss(y_true, y_pred):
     return tf.reduce_sum(l1_loss, axis=-1)
 
 
+class WingLoss:
+    def __init__(self, w=10.0, epsilon=2.0):
+        self.w = w
+        self.epsilon = epsilon
+
+    def compute_loss(self, y_true, y_pred):
+        x = y_pred - y_true
+        c = self.w - self.log_fn(self.w)
+        absolute_x = tf.abs(x)
+        losses = tf.where(
+            tf.greater(self.w, absolute_x),
+            self.log_fn(absolute_x),
+            absolute_x - c
+        )
+        loss = tf.reduce_mean(tf.reduce_sum(losses, axis=[1, 2]), axis=0)
+        return loss
+
+    def log_fn(self, x):
+        return self.w * tf.math.log(1.0 + x / self.epsilon)
+
+
 class IoUFamilyLoss:
     def __init__(self, coord='corner'):
         if coord == 'iou':
