@@ -1,5 +1,7 @@
+import numpy as np
 import tensorflow as tf
 from tensorflow.keras import backend as K
+from tensorflow.keras.losses import binary_crossentropy
 from solartf.data.bbox.type import BBoxesTensor
 from .util import tf_bbox_intersection
 
@@ -122,6 +124,25 @@ class IoUFamilyLoss:
         union_area = boxes1_area + boxes2_area - inter_area
 
         return 1.0 - tf.clip_by_value(inter_area / (union_area + tf.keras.backend.epsilon()), 0.0, 1.0)
+
+
+class MonteCarloEstimateLoss:
+
+    def logpx_loss(self, y_true, y_pred):
+        return binary_crossentropy(y_true, y_pred)
+
+    def logpz_loss(self, y_true, y_pred):
+        z, mean, logvar = tf.split(y_pred, num_or_size_splits=3, axis=-1)
+        logpz = self.log_normal_pdf(z, 0., 0.)
+        logqz_x = self.log_normal_pdf(z, mean, logvar)
+        return -tf.reduce_mean(logpz - logqz_x)
+
+    @staticmethod
+    def log_normal_pdf(sample, mean, logvar, raxis=1):
+        log2pi = tf.math.log(2. * np.pi)
+        return tf.reduce_sum(
+            -.5 * ((sample - mean) ** 2. * tf.exp(-logvar) + logvar + log2pi),
+            axis=raxis)
 
 
 class WeightedCategoricalCrossEntropy:
