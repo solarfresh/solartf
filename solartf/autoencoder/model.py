@@ -24,8 +24,7 @@ class CVAE(TFModelBase):
 
     def data_preprocess(self, inputs, training=True):
         image_input_list = inputs['image_input_list']
-
-        batch_image_input = np.stack([image_input.image_array
+        batch_image_input = np.stack([image_input.image_array.copy().astype(np.float32)
                                       for image_input in image_input_list], axis=0)
 
         batch_decoded_image = np.stack([image_input.image_array.copy().astype(np.float32) / 255.
@@ -90,7 +89,7 @@ class CVAE(TFModelBase):
                                             strides=1,
                                             padding='same',
                                             name='decoded_image')(x)
-        x = tf.nn.leaky_relu(x)
+        x = tf.sigmoid(x)
 
         return Model(latent, x)
 

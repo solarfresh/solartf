@@ -60,6 +60,9 @@ class ImageProcessor:
             hsv = cv2.cvtColor(image_array, cv2.COLOR_RGB2HSV)
         elif image_type == 'bgr':
             hsv = cv2.cvtColor(image_array, cv2.COLOR_BGR2HSV)
+        elif image_type == 'gray':
+            gray = cv2.cvtColor(image_array, cv2.COLOR_GRAY2BGR)
+            hsv = cv2.cvtColor(gray, cv2.COLOR_BGR2HSV)
         else:
             raise ValueError(f'{image_type} is not implemented...')
 
@@ -77,6 +80,10 @@ class ImageProcessor:
 
         if image_type == 'bgr':
             self.image_array = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+
+        if image_type == 'gray':
+            bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+            self.image_array = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
 
         return self
 
@@ -287,6 +294,9 @@ class ImageInput(ImageProcessor):
             self.scale = tuple(self.image_shape[index] / self.image_array.shape[index] for index in range(2))
             self.image_array = cv2.resize(self.image_array, self.image_shape[:2])
 
+        if len(self.image_array.shape) < 3:
+            self.image_array = self.image_array[..., np.newaxis]
+
     def convert(self, image_type):
         if self.image_type == 'bgr':
             if image_type == 'bgr':
@@ -354,3 +364,6 @@ class ImageAugmentation:
 
             if self.h_shift is not None or self.v_shift is not None:
                 image_input.translate(horizontal=self.h_shift, vertical=self.v_shift)
+
+            if len(image_input.image_array.shape) < 3:
+                image_input.image_array = image_input.image_array[..., np.newaxis]
