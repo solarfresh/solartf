@@ -29,6 +29,7 @@ class RandomOcclusion:
                 self._update_random_attr()
                 image_array = self._occluding(image_array, center)
                 kpt_input.labels[idx] = 0
+                kpt_input.points_tensor[idx] = np.array([0., 0.])
 
             image_input.image_array = image_array
 
