@@ -1,13 +1,70 @@
 import tensorflow as tf
+from tensorflow.keras.initializers import RandomNormal
 from tensorflow.keras.models import Model
 from tensorflow.keras import backend as K
 from tensorflow.keras.layers import (Activation, Add, BatchNormalization, Conv2D,
-                                     UpSampling2D, Dense, Dropout, Flatten,)
+                                     UpSampling2D, Dense, Dropout, Flatten, LeakyReLU)
 from tensorflow.keras.regularizers import l2
 from .activation import (hard_swish, relu)
-from .block import (inverted_res_block, resnet_block)
-from .layer import GaussianBlur
+from .block import (downsample_block, inverted_res_block, residual_block, resnet_block, upsample_block)
+from .layer import (GaussianBlur, InstanceNormalization, ReflectionPadding2D)
 from .util import get_filter_nb_by_depth
+
+
+class Discriminator(tf.keras.Model):
+    def __init__(self,
+                 init_filters=64,
+                 kernel_initializer=None,
+                 num_downsampling=3,
+                 name=None):
+        super(Discriminator, self).__init__()
+
+        self.kernel_initializer = RandomNormal(mean=0.0, stddev=0.02) \
+            if kernel_initializer is None else kernel_initializer
+
+        self.init_filters = init_filters
+        self.num_downsampling = num_downsampling
+        self.name = name
+
+    def call(self, inputs, training=None, mask=None):
+        x = Conv2D(
+            self.init_filters,
+            (4, 4),
+            strides=(2, 2),
+            padding="same",
+            kernel_initializer=self.kernel_initializer,
+        )(inputs)
+        x = LeakyReLU(0.2)(x)
+
+        num_filters = self.init_filters
+        for num_downsample_block in range(3):
+            num_filters *= 2
+            if num_downsample_block < 2:
+                x = downsample_block(
+                    x,
+                    filters=num_filters,
+                    activation=LeakyReLU(0.2),
+                    kernel_size=(4, 4),
+                    strides=(2, 2),
+                )
+            else:
+                x = downsample_block(
+                    x,
+                    filters=num_filters,
+                    activation=LeakyReLU(0.2),
+                    kernel_size=(4, 4),
+                    strides=(1, 1),
+                )
+
+        x = Conv2D(1, (4, 4),
+                   strides=(1, 1),
+                   padding="same",
+                   kernel_initializer=self.kernel_initializer)(x)
+
+        return Model(inputs=inputs, outputs=x, name=self.name)
+
+    def get_config(self):
+        return super(Discriminator, self).get_config()
 
 
 class LeNet5(tf.keras.Model):
@@ -253,3 +310,57 @@ class ResNetV2(tf.keras.Model):
 
     def get_config(self):
         return super(ResNetV2, self).get_config()
+
+
+class ResnetGenerator(tf.keras.Model):
+    def __init__(self,
+                 init_filters=64,
+                 num_downsampling_blocks=2,
+                 num_residual_blocks=9,
+                 num_upsample_blocks=2,
+                 kernel_initializer=None,
+                 gamma_initializer=None,
+                 name=None,):
+        super(ResnetGenerator, self).__init__()
+
+        self.kernel_initializer = RandomNormal(mean=0.0, stddev=0.02) \
+            if kernel_initializer is None else kernel_initializer
+        self.gamma_initializer = RandomNormal(mean=0.0, stddev=0.02) \
+            if gamma_initializer is None else gamma_initializer
+
+        self.init_filters = init_filters
+        self.num_downsampling_blocks = num_downsampling_blocks
+        self.num_residual_blocks = num_residual_blocks
+        self.num_upsample_blocks = num_upsample_blocks
+        self.name = name
+
+    def call(self, inputs, training=None, mask=None):
+        x = ReflectionPadding2D(padding=(3, 3))(inputs)
+        x = Conv2D(self.init_filters, (7, 7), kernel_initializer=self.kernel_initializer, use_bias=False)(x)
+        x = InstanceNormalization(gamma_initializer=self.gamma_initializer)(x)
+        x = Activation("relu")(x)
+
+        # Downsampling
+        filters = self.init_filters
+        for _ in range(self.num_downsampling_blocks):
+            filters *= 2
+            x = downsample_block(x, filters=filters, activation=Activation("relu"))
+
+        # Residual blocks
+        for _ in range(self.num_residual_blocks):
+            x = residual_block(x, activation=Activation("relu"))
+
+        # Upsampling
+        for _ in range(self.num_upsample_blocks):
+            filters //= 2
+            x = upsample_block(x, filters, activation=Activation("relu"))
+
+        # Final block
+        x = ReflectionPadding2D(padding=(3, 3))(x)
+        x = Conv2D(3, (7, 7), padding="valid")(x)
+        x = Activation("tanh")(x)
+
+        return Model(inputs, x, name=self.name)
+
+    def get_config(self):
+        return super(ResnetGenerator, self).get_config()

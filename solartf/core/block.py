@@ -1,10 +1,43 @@
 from tensorflow.keras import backend as K
-from tensorflow.keras.layers import (Add, Activation, BatchNormalization, Conv2D,
+from tensorflow.keras.initializers import RandomNormal
+from tensorflow.keras.layers import (Add, Activation, BatchNormalization, Conv2D, Conv2DTranspose,
                                      DepthwiseConv2D, GlobalAveragePooling2D, Multiply,
                                      ReLU, Reshape, ZeroPadding2D)
 from tensorflow.keras.regularizers import l2
 from .activation import hard_sigmoid
+from .layer import (InstanceNormalization, ReflectionPadding2D)
 from .util import (correct_pad, get_filter_nb_by_depth)
+
+
+def downsample_block(
+    x,
+    filters,
+    activation,
+    kernel_initializer=None,
+    kernel_size=(3, 3),
+    strides=(2, 2),
+    padding="same",
+    gamma_initializer=None,
+    use_bias=False,
+):
+
+    kernel_initializer = RandomNormal(mean=0.0, stddev=0.02) \
+        if kernel_initializer is None else kernel_initializer
+    gamma_initializer = RandomNormal(mean=0.0, stddev=0.02) \
+        if gamma_initializer is None else gamma_initializer
+
+    x = Conv2D(
+        filters,
+        kernel_size,
+        strides=strides,
+        kernel_initializer=kernel_initializer,
+        padding=padding,
+        use_bias=use_bias,
+    )(x)
+    x = InstanceNormalization(gamma_initializer=gamma_initializer)(x)
+    if activation:
+        x = activation(x)
+    return x
 
 
 def resnet_block(inputs,
@@ -113,6 +146,51 @@ def inverted_res_block(x,
     return x
 
 
+def residual_block(
+    x,
+    activation,
+    kernel_initializer=None,
+    kernel_size=(3, 3),
+    strides=(1, 1),
+    padding="valid",
+    gamma_initializer=None,
+    use_bias=False,
+):
+    prefix = 'residual_block/'
+    dim = x.shape[-1]
+    input_tensor = x
+
+    kernel_initializer = RandomNormal(mean=0.0, stddev=0.02) \
+        if kernel_initializer is None else kernel_initializer
+    gamma_initializer = RandomNormal(mean=0.0, stddev=0.02) \
+        if gamma_initializer is None else gamma_initializer
+
+    x = ReflectionPadding2D()(input_tensor)
+    x = Conv2D(
+        dim,
+        kernel_size,
+        strides=strides,
+        kernel_initializer=kernel_initializer,
+        padding=padding,
+        use_bias=use_bias,
+    )(x)
+    x = InstanceNormalization(gamma_initializer=gamma_initializer)(x)
+    x = activation(x)
+
+    x = ReflectionPadding2D()(x)
+    x = Conv2D(
+        dim,
+        kernel_size,
+        strides=strides,
+        kernel_initializer=kernel_initializer,
+        padding=padding,
+        use_bias=use_bias,
+    )(x)
+    x = InstanceNormalization(gamma_initializer=gamma_initializer)(x)
+    x = Add(name=prefix + 'Add')([input_tensor, x])
+    return x
+
+
 def se_block(inputs, filters, se_ratio, prefix):
     x = GlobalAveragePooling2D(name=prefix + 'squeeze_excite/AvgPool')(inputs)
 
@@ -132,4 +210,35 @@ def se_block(inputs, filters, se_ratio, prefix):
                name=prefix + 'squeeze_excite/Conv_1')(x)
     x = hard_sigmoid(x)
     x = Multiply(name=prefix + 'squeeze_excite/Mul')([inputs, x])
+    return x
+
+
+def upsample_block(
+    x,
+    filters,
+    activation,
+    kernel_size=(3, 3),
+    strides=(2, 2),
+    padding="same",
+    kernel_initializer=None,
+    gamma_initializer=None,
+    use_bias=False,
+):
+
+    kernel_initializer = RandomNormal(mean=0.0, stddev=0.02) \
+        if kernel_initializer is None else kernel_initializer
+    gamma_initializer = RandomNormal(mean=0.0, stddev=0.02) \
+        if gamma_initializer is None else gamma_initializer
+
+    x = Conv2DTranspose(
+        filters,
+        kernel_size,
+        strides=strides,
+        padding=padding,
+        kernel_initializer=kernel_initializer,
+        use_bias=use_bias,
+    )(x)
+    x = InstanceNormalization(gamma_initializer=gamma_initializer)(x)
+    if activation:
+        x = activation(x)
     return x
