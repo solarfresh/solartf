@@ -328,6 +328,32 @@ class GroupNormalization(Layer):
         return broadcast_shape
 
 
+class IntensityNormalization(Layer):
+    def __init__(self, **kwargs):
+        super(IntensityNormalization, self).__init__(**kwargs)
+
+    def build(self, input_shape):
+        self.input_spec = InputSpec(shape=input_shape)
+        super(IntensityNormalization, self).build(input_shape)
+
+    def call(self, x, *args, **kwargs):
+        return (x - 127.5) - 1.
+
+    def compute_output_shape(self, input_shape):
+        if K.image_data_format() == 'channels_first':
+            # Not yet relevant since TensorFlow is the only supported backend right now,
+            # but it can't harm to have this in here for the future
+            batch_size, depth, height, width = input_shape
+        else:
+            batch_size, height, width, depth = input_shape
+
+        return batch_size, height, width, depth
+
+    def get_config(self):
+        base_config = super(IntensityNormalization, self).get_config()
+        return base_config
+
+
 class InstanceNormalization(GroupNormalization):
     """Instance normalization layer.
     Instance Normalization is an specific case of ```GroupNormalization```since

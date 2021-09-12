@@ -7,7 +7,7 @@ from tensorflow.keras.layers import (Activation, Add, BatchNormalization, Conv2D
 from tensorflow.keras.regularizers import l2
 from .activation import (hard_swish, relu)
 from .block import (downsample_block, inverted_res_block, residual_block, resnet_block, upsample_block)
-from .layer import (GaussianBlur, InstanceNormalization, ReflectionPadding2D)
+from .layer import (GaussianBlur, InstanceNormalization, IntensityNormalization, ReflectionPadding2D)
 from .util import get_filter_nb_by_depth
 
 
@@ -335,7 +335,8 @@ class ResnetGenerator(tf.keras.Model):
         self.name = name
 
     def call(self, inputs, training=None, mask=None):
-        x = ReflectionPadding2D(padding=(3, 3))(inputs)
+        x = IntensityNormalization()(inputs)
+        x = ReflectionPadding2D(padding=(3, 3))(x)
         x = Conv2D(self.init_filters, (7, 7), kernel_initializer=self.kernel_initializer, use_bias=False)(x)
         x = InstanceNormalization(gamma_initializer=self.gamma_initializer)(x)
         x = Activation("relu")(x)
