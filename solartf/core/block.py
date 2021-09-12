@@ -187,7 +187,7 @@ def residual_block(
         use_bias=use_bias,
     )(x)
     x = InstanceNormalization(gamma_initializer=gamma_initializer)(x)
-    x = Add(name=prefix + 'Add')([input_tensor, x])
+    x = Add()([input_tensor, x])
     return x
 
 

@@ -4,7 +4,9 @@ from tensorflow.keras.layers import (Input,)
 from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
 from solartf.core.graph import (ResnetGenerator, Discriminator)
+from solartf.core.layer import IntensityNormalization
 from solartf.core.model import TFModelBase
+
 from .loss import CycleGANLoss
 
 
@@ -20,10 +22,10 @@ class CycleGan(TFModelBase):
         self.input_shape_x = input_shape_x
         self.input_shape_y = input_shape_y
 
-        self.gen_G = generator_G if generator_G is not None else ResnetGenerator(name='generator_G')
-        self.gen_F = generator_F if generator_F is not None else ResnetGenerator(name='generator_F')
-        self.disc_X = discriminator_X if discriminator_X is not None else Discriminator(name='discriminator_X')
-        self.disc_Y = discriminator_Y if discriminator_Y is not None else Discriminator(name='discriminator_Y')
+        self.gen_G = generator_G if generator_G is not None else ResnetGenerator(prefix='generator_G')
+        self.gen_F = generator_F if generator_F is not None else ResnetGenerator(prefix='generator_F')
+        self.disc_X = discriminator_X if discriminator_X is not None else Discriminator(prefix='discriminator_X')
+        self.disc_Y = discriminator_Y if discriminator_Y is not None else Discriminator(prefix='discriminator_Y')
 
         self.gen_x_shape = None
         self.gen_y_shape = None
@@ -59,9 +61,11 @@ class CycleGan(TFModelBase):
     def build_model(self):
         real_x = Input(shape=self.input_shape_x, name='real_x')
         real_y = Input(shape=self.input_shape_y, name='real_y')
+        # real_x = IntensityNormalization()(real_x)
+        # real_y = IntensityNormalization()(real_y)
 
         fake_y = self.gen_G(real_x)
-        fake_x = self.gen_G(real_y)
+        fake_x = self.gen_F(real_y)
 
         cycled_x = self.gen_F(fake_y)
         cycled_y = self.gen_G(fake_x)

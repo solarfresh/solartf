@@ -1,11 +1,12 @@
 from tensorflow.keras import optimizers
 from tensorflow.keras.callbacks import ModelCheckpoint
 from .loss import CycleGANLoss
+from .model import CycleGan
 
 
 class CycleGANConfig:
-    IMAGE_SHAPE_X = (226, 226, 3)
-    IMAGE_SHAPE_Y = (226, 226, 3)
+    IMAGE_SHAPE_X = (256, 256, 3)
+    IMAGE_SHAPE_Y = (256, 256, 3)
     IMAGE_TYPE_X = 'bgr'
     IMAGE_TYPE_Y = 'bgr'
 
@@ -22,6 +23,9 @@ class CycleGANConfig:
     TEST_IMAGE_PATH_X = ''
     TEST_IMAGE_PATH_Y = ''
     TEST_SHUFFLE = False
+
+    MODEL = CycleGan(input_shape_x=IMAGE_SHAPE_X,
+                     input_shape_y=IMAGE_SHAPE_Y)
 
     TRAIN_OPTIMIZER = optimizers.Adam(learning_rate=0.0001, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=5e-04)
 

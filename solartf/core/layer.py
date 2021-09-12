@@ -337,7 +337,7 @@ class IntensityNormalization(Layer):
         super(IntensityNormalization, self).build(input_shape)
 
     def call(self, x, *args, **kwargs):
-        return (x - 127.5) - 1.
+        return (x - 127.5) / 255. - 1.
 
     def compute_output_shape(self, input_shape):
         if K.image_data_format() == 'channels_first':
