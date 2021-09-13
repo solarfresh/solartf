@@ -40,6 +40,7 @@ class LabelReader:
         return [Keypoint(class_id=kpt['class_id'],
                          x=kpt['x'],
                          y=kpt['y'],
+                         visible=kpt['visible'],
                          class_map=self.class_map) for kpt in keypoints]
 
     def _get_bboxes(self):
