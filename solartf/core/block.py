@@ -1,43 +1,70 @@
 from tensorflow.keras import backend as K
 from tensorflow.keras.initializers import RandomNormal
-from tensorflow.keras.layers import (Add, Activation, BatchNormalization, Conv2D, Conv2DTranspose,
-                                     DepthwiseConv2D, GlobalAveragePooling2D, Multiply,
-                                     ReLU, Reshape, ZeroPadding2D)
+from tensorflow.keras import layers
 from tensorflow.keras.regularizers import l2
 from .activation import hard_sigmoid
 from .layer import (InstanceNormalization, ReflectionPadding2D)
 from .util import (correct_pad, get_filter_nb_by_depth)
 
 
-def downsample_block(
-    x,
-    filters,
-    activation,
-    kernel_initializer=None,
-    kernel_size=(3, 3),
-    strides=(2, 2),
-    padding="same",
-    gamma_initializer=None,
-    use_bias=False,
-):
+class DownsampleBlock(layers.Layer):
+    def __init__(self,
+                 filters,
+                 kernel_initializer=None,
+                 kernel_size=(3, 3),
+                 strides=(2, 2),
+                 padding="same",
+                 gamma_initializer=None,
+                 use_bias=False,
+                 activation=None,
+                 **kwargs):
+        super(DownsampleBlock, self).__init__(**kwargs)
+        self.filters = filters
+        self.kernel_size = kernel_size
+        self.strides = strides
+        self.padding = padding
+        self.use_bias= use_bias
+        self.activation = activation
 
-    kernel_initializer = RandomNormal(mean=0.0, stddev=0.02) \
-        if kernel_initializer is None else kernel_initializer
-    gamma_initializer = RandomNormal(mean=0.0, stddev=0.02) \
-        if gamma_initializer is None else gamma_initializer
+        self.kernel_initializer = RandomNormal(mean=0.0, stddev=0.02) \
+            if kernel_initializer is None else kernel_initializer
+        self.gamma_initializer = RandomNormal(mean=0.0, stddev=0.02) \
+            if gamma_initializer is None else gamma_initializer
 
-    x = Conv2D(
-        filters,
-        kernel_size,
-        strides=strides,
-        kernel_initializer=kernel_initializer,
-        padding=padding,
-        use_bias=use_bias,
-    )(x)
-    x = InstanceNormalization(gamma_initializer=gamma_initializer)(x)
-    if activation:
-        x = activation(x)
-    return x
+        self.conv = layers.Conv2D(
+            self.filters,
+            self.kernel_size,
+            strides=self.strides,
+            kernel_initializer=self.kernel_initializer,
+            padding=self.padding,
+            use_bias=self.use_bias,
+        )
+        self.inst_norm = InstanceNormalization(gamma_initializer=self.gamma_initializer)
+
+    def build(self, input_shape):
+        self.input_spec = layers.InputSpec(shape=input_shape)
+
+    def call(self, x, *args, **kwargs):
+        x = self.conv(x)
+        x = self.inst_norm(x)
+        if self.activation is not None:
+            x = self.activation(x)
+        return x
+
+    def get_config(self):
+        config = {
+            'filters': self.filters,
+            'kernel_size': self.kernel_size,
+            'strides': self.strides,
+            'padding': self.padding,
+            'use_bias': self.use_bias,
+            'activation': self.activation,
+            'kernel_initializer': self.kernel_initializer,
+            'gamma_initializer': self.gamma_initializer,
+        }
+        base_config = super(DownsampleBlock, self).get_config()
+        base_config.update(config)
+        return base_config
 
 
 def resnet_block(inputs,
@@ -62,25 +89,25 @@ def resnet_block(inputs,
     # Returns
         x (tensor): tensor as input to the next layer
     """
-    conv = Conv2D(num_filters,
-                  kernel_size=kernel_size,
-                  strides=strides,
-                  padding='same',
-                  kernel_initializer='he_normal',
-                  kernel_regularizer=l2(1e-4))
+    conv = layers.Conv2D(num_filters,
+                         kernel_size=kernel_size,
+                         strides=strides,
+                         padding='same',
+                         kernel_initializer='he_normal',
+                         kernel_regularizer=l2(1e-4))
 
     x = inputs
     if conv_first:
         x = conv(x)
         if batch_normalization:
-            x = BatchNormalization()(x)
+            x = layers.BatchNormalization()(x)
         if activation is not None:
-            x = Activation(activation)(x)
+            x = layers.Activation(activation)(x)
     else:
         if batch_normalization:
-            x = BatchNormalization()(x)
+            x = layers.BatchNormalization()(x)
         if activation is not None:
-            x = Activation(activation)(x)
+            x = layers.Activation(activation)(x)
         x = conv(x)
     return x
 
@@ -102,143 +129,190 @@ def inverted_res_block(x,
     if name:
         # Expand
         prefix = 'expanded_conv_{}/'.format(name)
-        x = Conv2D(get_filter_nb_by_depth(infilters * expansion),
-                   kernel_size=1,
-                   padding='same',
-                   use_bias=False,
-                   name=prefix + 'expand')(x)
-        x = BatchNormalization(axis=channel_axis,
-                               epsilon=1e-3,
-                               momentum=0.999,
-                               name=prefix + 'expand/BatchNorm')(x)
+        x = layers.Conv2D(get_filter_nb_by_depth(infilters * expansion),
+                          kernel_size=1,
+                          padding='same',
+                          use_bias=False,
+                          name=prefix + 'expand')(x)
+        x = layers.BatchNormalization(axis=channel_axis,
+                                      epsilon=1e-3,
+                                      momentum=0.999,
+                                      name=prefix + 'expand/BatchNorm')(x)
         x = activation(x)
 
     if stride == 2:
-        x = ZeroPadding2D(padding=correct_pad(x, kernel_size),
-                          name=prefix + 'depthwise/pad')(x)
+        x = layers.ZeroPadding2D(padding=correct_pad(x, kernel_size),
+                                 name=prefix + 'depthwise/pad')(x)
 
-    x = DepthwiseConv2D(kernel_size,
-                        strides=stride,
-                        padding='same' if stride == 1 else 'valid',
-                        use_bias=False,
-                        name=prefix + 'depthwise')(x)
-    x = BatchNormalization(axis=channel_axis,
-                           epsilon=1e-3,
-                           momentum=0.999,
-                           name=prefix + 'depthwise/BatchNorm')(x)
+    x = layers.DepthwiseConv2D(kernel_size,
+                               strides=stride,
+                               padding='same' if stride == 1 else 'valid',
+                               use_bias=False,
+                               name=prefix + 'depthwise')(x)
+    x = layers.BatchNormalization(axis=channel_axis,
+                                  epsilon=1e-3,
+                                  momentum=0.999,
+                                  name=prefix + 'depthwise/BatchNorm')(x)
     x = activation(x)
 
     if se_ratio:
         x = se_block(x, get_filter_nb_by_depth(infilters * expansion), se_ratio, prefix)
 
-    x = Conv2D(filters,
-               kernel_size=1,
-               padding='same',
-               use_bias=False,
-               name=prefix + 'project')(x)
-    x = BatchNormalization(axis=channel_axis,
-                           epsilon=1e-3,
-                           momentum=0.999,
-                           name=prefix + 'project/BatchNorm')(x)
+    x = layers.Conv2D(filters,
+                      kernel_size=1,
+                      padding='same',
+                      use_bias=False,
+                      name=prefix + 'project')(x)
+    x = layers.BatchNormalization(axis=channel_axis,
+                                  epsilon=1e-3,
+                                  momentum=0.999,
+                                  name=prefix + 'project/BatchNorm')(x)
 
     if stride == 1 and infilters == filters:
-        x = Add(name=prefix + 'Add')([shortcut, x])
+        x = layers.Add(name=prefix + 'Add')([shortcut, x])
     return x
 
 
-def residual_block(
-    x,
-    activation,
-    kernel_initializer=None,
-    kernel_size=(3, 3),
-    strides=(1, 1),
-    padding="valid",
-    gamma_initializer=None,
-    use_bias=False,
-):
-    prefix = 'residual_block/'
-    dim = x.shape[-1]
-    input_tensor = x
+class ResidualBlock(layers.Layer):
+    def __init__(self,
+                 filters,
+                 kernel_size=(3, 3),
+                 kernel_initializer=None,
+                 gamma_initializer=None,
+                 use_bias=False,
+                 activation=None,
+                 **kwargs):
+        super(ResidualBlock, self).__init__(**kwargs)
+        self.filters = filters
+        self.kernel_size = kernel_size
+        self.use_bias= use_bias
+        self.activation = activation
 
-    kernel_initializer = RandomNormal(mean=0.0, stddev=0.02) \
-        if kernel_initializer is None else kernel_initializer
-    gamma_initializer = RandomNormal(mean=0.0, stddev=0.02) \
-        if gamma_initializer is None else gamma_initializer
+        self.kernel_initializer = RandomNormal(mean=0.0, stddev=0.02) \
+            if kernel_initializer is None else kernel_initializer
+        self.gamma_initializer = RandomNormal(mean=0.0, stddev=0.02) \
+            if gamma_initializer is None else gamma_initializer
 
-    x = ReflectionPadding2D()(input_tensor)
-    x = Conv2D(
-        dim,
-        kernel_size,
-        strides=strides,
-        kernel_initializer=kernel_initializer,
-        padding=padding,
-        use_bias=use_bias,
-    )(x)
-    x = InstanceNormalization(gamma_initializer=gamma_initializer)(x)
-    x = activation(x)
+        self.reflect_padding = ReflectionPadding2D()
+        self.conv = layers.Conv2D(
+            self.filters,
+            self.kernel_size,
+            strides=(1, 1),
+            kernel_initializer=self.kernel_initializer,
+            padding='valid',
+            use_bias=self.use_bias,
+        )
 
-    x = ReflectionPadding2D()(x)
-    x = Conv2D(
-        dim,
-        kernel_size,
-        strides=strides,
-        kernel_initializer=kernel_initializer,
-        padding=padding,
-        use_bias=use_bias,
-    )(x)
-    x = InstanceNormalization(gamma_initializer=gamma_initializer)(x)
-    x = Add()([input_tensor, x])
-    return x
+        self.inst_norm = InstanceNormalization(gamma_initializer=self.gamma_initializer)
+
+    def build(self, input_shape):
+        self.input_spec = layers.InputSpec(shape=input_shape)
+
+    def call(self, x, *args, **kwargs):
+        input_tensor = x
+        for _ in range(2):
+            x = self.reflect_padding(x)
+            x = self.conv(x)
+            x = self.inst_norm(x)
+            if self.activation is not None:
+                x = self.activation(x)
+
+        x = layers.add([input_tensor, x])
+        return x
+
+    def get_config(self):
+        config = {
+            'filters': self.filters,
+            'kernel_size': self.kernel_size,
+            'use_bias': self.use_bias,
+            'activation': self.activation,
+            'kernel_initializer': self.kernel_initializer,
+            'gamma_initializer': self.gamma_initializer,
+        }
+        base_config = super(ResidualBlock, self).get_config()
+        base_config.update(config)
+        return base_config
 
 
 def se_block(inputs, filters, se_ratio, prefix):
-    x = GlobalAveragePooling2D(name=prefix + 'squeeze_excite/AvgPool')(inputs)
+    x = layers.GlobalAveragePooling2D(name=prefix + 'squeeze_excite/AvgPool')(inputs)
 
     if K.image_data_format() == 'channels_first':
-        x = Reshape((filters, 1, 1))(x)
+        x = layers.Reshape((filters, 1, 1))(x)
     else:
-        x = Reshape((1, 1, filters))(x)
+        x = layers.Reshape((1, 1, filters))(x)
 
-    x = Conv2D(get_filter_nb_by_depth(filters * se_ratio),
-               kernel_size=1,
-               padding='same',
-               name=prefix + 'squeeze_excite/Conv')(x)
-    x = ReLU(name=prefix + 'squeeze_excite/Relu')(x)
-    x = Conv2D(filters,
-               kernel_size=1,
-               padding='same',
-               name=prefix + 'squeeze_excite/Conv_1')(x)
-    x = hard_sigmoid(x)
-    x = Multiply(name=prefix + 'squeeze_excite/Mul')([inputs, x])
-    return x
-
-
-def upsample_block(
-    x,
-    filters,
-    activation,
-    kernel_size=(3, 3),
-    strides=(2, 2),
-    padding="same",
-    kernel_initializer=None,
-    gamma_initializer=None,
-    use_bias=False,
-):
-
-    kernel_initializer = RandomNormal(mean=0.0, stddev=0.02) \
-        if kernel_initializer is None else kernel_initializer
-    gamma_initializer = RandomNormal(mean=0.0, stddev=0.02) \
-        if gamma_initializer is None else gamma_initializer
-
-    x = Conv2DTranspose(
+    x = layers.Conv2D(
+        get_filter_nb_by_depth(filters * se_ratio),
+        kernel_size=1,
+        padding='same',
+        name=prefix + 'squeeze_excite/Conv')(x)
+    x = layers.ReLU(name=prefix + 'squeeze_excite/Relu')(x)
+    x = layers.Conv2D(
         filters,
-        kernel_size,
-        strides=strides,
-        padding=padding,
-        kernel_initializer=kernel_initializer,
-        use_bias=use_bias,
-    )(x)
-    x = InstanceNormalization(gamma_initializer=gamma_initializer)(x)
-    if activation:
-        x = activation(x)
+        kernel_size=1,
+        padding='same',
+        name=prefix + 'squeeze_excite/Conv_1')(x)
+    x = hard_sigmoid(x)
+    x = layers.Multiply(name=prefix + 'squeeze_excite/Mul')([inputs, x])
     return x
+
+
+class UpsampleBlock(layers.Layer):
+    def __init__(self,
+                 filters,
+                 kernel_size=(3, 3),
+                 strides=(2, 2),
+                 padding="same",
+                 kernel_initializer=None,
+                 gamma_initializer=None,
+                 use_bias=False,
+                 activation=None,
+                 **kwargs):
+        super(UpsampleBlock, self).__init__(**kwargs)
+        self.filters = filters
+        self.kernel_size = kernel_size
+        self.strides = strides
+        self.padding = padding
+        self.use_bias= use_bias
+        self.activation = activation
+
+        self.kernel_initializer = RandomNormal(mean=0.0, stddev=0.02) \
+            if kernel_initializer is None else kernel_initializer
+        self.gamma_initializer = RandomNormal(mean=0.0, stddev=0.02) \
+            if gamma_initializer is None else gamma_initializer
+
+        self.invert_conv = layers.Conv2DTranspose(
+            self.filters,
+            self.kernel_size,
+            strides=self.strides,
+            kernel_initializer=self.kernel_initializer,
+            padding=self.padding,
+            use_bias=self.use_bias,
+        )
+        self.inst_norm = InstanceNormalization(gamma_initializer=self.gamma_initializer)
+
+    def build(self, input_shape):
+        self.input_spec = layers.InputSpec(shape=input_shape)
+
+    def call(self, x, *args, **kwargs):
+        x = self.invert_conv(x)
+        x = self.inst_norm(x)
+        if self.activation is not None:
+            x = self.activation(x)
+        return x
+
+    def get_config(self):
+        config = {
+            'filters': self.filters,
+            'kernel_size': self.kernel_size,
+            'strides': self.strides,
+            'padding': self.padding,
+            'use_bias': self.use_bias,
+            'activation': self.activation,
+            'kernel_initializer': self.kernel_initializer,
+            'gamma_initializer': self.gamma_initializer,
+        }
+        base_config = super(UpsampleBlock, self).get_config()
+        base_config.update(config)
+        return base_config

@@ -26,6 +26,7 @@ class CycleGan(TFModelBase):
         self.gen_F = generator_F if generator_F is not None else ResnetGenerator(prefix='generator_F')
         self.disc_X = discriminator_X if discriminator_X is not None else Discriminator(prefix='discriminator_X')
         self.disc_Y = discriminator_Y if discriminator_Y is not None else Discriminator(prefix='discriminator_Y')
+        self.intensity_norm = IntensityNormalization()
 
         self.gen_x_shape = None
         self.gen_y_shape = None
@@ -61,23 +62,23 @@ class CycleGan(TFModelBase):
     def build_model(self):
         real_x = Input(shape=self.input_shape_x, name='real_x')
         real_y = Input(shape=self.input_shape_y, name='real_y')
-        # real_x = IntensityNormalization()(real_x)
-        # real_y = IntensityNormalization()(real_y)
+        real_x_norm = self.intensity_norm(real_x)
+        real_y_norm = self.intensity_norm(real_y)
 
-        fake_y = self.gen_G(real_x)
-        fake_x = self.gen_F(real_y)
+        fake_y_norm = self.gen_G(real_x_norm)
+        fake_x_norm = self.gen_F(real_y_norm)
 
-        cycled_x = self.gen_F(fake_y)
-        cycled_y = self.gen_G(fake_x)
+        cycled_x = self.gen_F(fake_y_norm)
+        cycled_y = self.gen_G(fake_x_norm)
 
-        same_x = self.gen_F(real_x)
-        same_y = self.gen_G(real_y)
+        same_x = self.gen_F(real_x_norm)
+        same_y = self.gen_G(real_y_norm)
 
-        disc_real_x = self.disc_X(real_x)
-        disc_fake_x = self.disc_X(fake_x)
+        disc_real_x = self.disc_X(real_x_norm)
+        disc_fake_x = self.disc_X(fake_x_norm)
 
-        disc_real_y = self.disc_Y(real_y)
-        disc_fake_y = self.disc_Y(fake_y)
+        disc_real_y = self.disc_Y(real_y_norm)
+        disc_fake_y = self.disc_Y(fake_y_norm)
 
         gen_x = tf.concat((real_x, cycled_x, same_x), axis=-1)
         gen_y = tf.concat((real_y, cycled_y, same_y), axis=-1)
@@ -114,7 +115,7 @@ class CycleGan(TFModelBase):
             'gen_x': cycle_gan_loss.gen_loss,
             'gen_y': cycle_gan_loss.gen_loss,
             'disc_x': cycle_gan_loss.disc_loss,
-            'disc_y':cycle_gan_loss.disc_loss
+            'disc_y': cycle_gan_loss.disc_loss
         } if loss is None else loss
 
         self.model.compile(optimizer=optimizer, loss=loss, metrics=metrics, loss_weights=loss_weights)
