@@ -85,10 +85,10 @@ class CycleGan(TFModelBase):
         disc_x = tf.concat((disc_real_x, disc_fake_x), axis=-1)
         disc_y = tf.concat((disc_real_y, disc_fake_y), axis=-1)
 
-        self.gen_x_shape = gen_x.shape
-        self.gen_y_shape = gen_y.shape
-        self.disc_x_shape = disc_x.shape
-        self.disc_y_shape = disc_y.shape
+        self.gen_x_shape = gen_x.shape[1:]
+        self.gen_y_shape = gen_y.shape[1:]
+        self.disc_x_shape = disc_x.shape[1:]
+        self.disc_y_shape = disc_y.shape[1:]
 
         inputs = {
             'real_x': real_x,
