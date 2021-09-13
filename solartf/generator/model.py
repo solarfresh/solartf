@@ -80,8 +80,8 @@ class CycleGan(TFModelBase):
         disc_real_y = self.disc_Y(real_y_norm)
         disc_fake_y = self.disc_Y(fake_y_norm)
 
-        gen_x = tf.concat((real_x, cycled_x, same_x), axis=-1)
-        gen_y = tf.concat((real_y, cycled_y, same_y), axis=-1)
+        gen_x = tf.concat((real_x_norm, cycled_x, same_x), axis=-1)
+        gen_y = tf.concat((real_y_norm, cycled_y, same_y), axis=-1)
         disc_x = tf.concat((disc_real_x, disc_fake_x), axis=-1)
         disc_y = tf.concat((disc_real_y, disc_fake_y), axis=-1)
 
