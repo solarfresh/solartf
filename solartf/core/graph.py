@@ -1,13 +1,74 @@
 import tensorflow as tf
+from tensorflow.keras.initializers import RandomNormal
 from tensorflow.keras.models import Model
 from tensorflow.keras import backend as K
-from tensorflow.keras.layers import (Activation, Add, BatchNormalization, Conv2D,
-                                     UpSampling2D, Dense, Dropout, Flatten,)
+from tensorflow.keras.layers import (Activation, Add, BatchNormalization, Conv2D, Input,
+                                     UpSampling2D, Dense, Dropout, Flatten, LeakyReLU)
 from tensorflow.keras.regularizers import l2
 from .activation import (hard_swish, relu)
-from .block import (inverted_res_block, resnet_block)
-from .layer import GaussianBlur
+from .block import (DownsampleBlock, inverted_res_block, ResidualBlock, resnet_block, UpsampleBlock)
+from .layer import (GaussianBlur, InstanceNormalization, ReflectionPadding2D)
 from .util import get_filter_nb_by_depth
+
+
+class Discriminator(tf.keras.Model):
+    def __init__(self,
+                 init_filters=64,
+                 kernel_initializer=None,
+                 num_downsampling=3,
+                 prefix=None):
+        super(Discriminator, self).__init__()
+
+        self.kernel_initializer = RandomNormal(mean=0.0, stddev=0.02) \
+            if kernel_initializer is None else kernel_initializer
+
+        self.init_filters = init_filters
+        self.num_downsampling = num_downsampling
+        self.prefix = 'disc' if prefix is None else prefix
+
+        self.activate_leaky_relu = LeakyReLU(0.2)
+        self.init_conv = Conv2D(
+            self.init_filters,
+            (4, 4),
+            strides=(2, 2),
+            padding="same",
+            kernel_initializer=self.kernel_initializer,
+        )
+        self.final_conv = Conv2D(
+            1, (4, 4),
+            strides=(1, 1),
+            padding="same",
+            kernel_initializer=self.kernel_initializer)
+
+        self.downsample_blocks = []
+        num_filters = self.init_filters
+        for num_downsample_block in range(self.num_downsampling - 1):
+            num_filters *= 2
+            self.downsample_blocks.append(DownsampleBlock(
+                filters=num_filters,
+                activation=self.activate_leaky_relu,
+                kernel_size=(4, 4),
+                strides=(2, 2),
+            ))
+
+        self.downsample_blocks.append(DownsampleBlock(
+            filters=num_filters,
+            activation=self.activate_leaky_relu,
+            kernel_size=(4, 4),
+            strides=(1, 1),
+        ))
+
+    def call(self, inputs):
+        x = self.init_conv(inputs)
+        x = self.activate_leaky_relu(x)
+
+        for downsample_block in self.downsample_blocks:
+            x = downsample_block(x)
+
+        return self.final_conv(x)
+
+    def get_config(self):
+        return super(Discriminator, self).get_config()
 
 
 class LeNet5(tf.keras.Model):
@@ -253,3 +314,77 @@ class ResNetV2(tf.keras.Model):
 
     def get_config(self):
         return super(ResNetV2, self).get_config()
+
+
+class ResnetGenerator(tf.keras.Model):
+    def __init__(self,
+                 init_filters=64,
+                 num_downsampling_blocks=2,
+                 num_residual_blocks=9,
+                 num_upsample_blocks=2,
+                 kernel_initializer=None,
+                 gamma_initializer=None,
+                 prefix=None):
+        super(ResnetGenerator, self).__init__()
+
+        self.kernel_initializer = RandomNormal(mean=0.0, stddev=0.02) \
+            if kernel_initializer is None else kernel_initializer
+        self.gamma_initializer = RandomNormal(mean=0.0, stddev=0.02) \
+            if gamma_initializer is None else gamma_initializer
+
+        self.init_filters = init_filters
+        self.num_downsampling_blocks = num_downsampling_blocks
+        self.num_residual_blocks = num_residual_blocks
+        self.num_upsample_blocks = num_upsample_blocks
+        self.prefix = 'resnet_gen' if prefix is None else prefix
+
+        self.reflection_padding = ReflectionPadding2D(padding=(3, 3))
+        self.init_conv = Conv2D(self.init_filters, (7, 7), kernel_initializer=self.kernel_initializer, use_bias=False)
+        self.final_conv = Conv2D(3, (7, 7), padding="valid")
+        self.inst_norm = InstanceNormalization(gamma_initializer=self.gamma_initializer)
+        self.active_relu = Activation("relu")
+        self.active_tanh = Activation("tanh")
+
+        filters = self.init_filters
+        self.downsample_blocks = []
+        for _ in range(self.num_downsampling_blocks):
+            filters *= 2
+            self.downsample_blocks.append(DownsampleBlock(filters=filters,
+                                                          activation=self.active_relu))
+
+        self.residual_block = ResidualBlock(filters=filters,
+                                            activation=self.active_relu)
+
+        self.upsample_blocks = []
+        for _ in range(self.num_upsample_blocks):
+            filters //= 2
+            self.upsample_blocks.append(UpsampleBlock(filters=filters,
+                                                      activation=self.active_relu))
+
+    def call(self, inputs):
+        x = self.reflection_padding(inputs)
+        x = self.init_conv(x)
+        x = self.inst_norm(x)
+        x = self.active_relu(x)
+
+        # Downsampling
+        for downsample_block in self.downsample_blocks:
+            x = downsample_block(x)
+
+        # Residual blocks
+        for _ in range(self.num_residual_blocks):
+            x = self.residual_block(x)
+
+        # Upsampling
+        for upsample_block in self.upsample_blocks:
+            x = upsample_block(x)
+
+        # Final block
+        x = self.reflection_padding(x)
+        x = self.final_conv(x)
+        x = self.active_tanh(x)
+
+        return x
+
+    def get_config(self):
+        return super(ResnetGenerator, self).get_config()
