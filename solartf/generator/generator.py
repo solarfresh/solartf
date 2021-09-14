@@ -65,7 +65,8 @@ class CycleGANImageDirectoryGenerator(KerasGeneratorBase):
 
     def on_epoch_end(self):
         if self.shuffle:
-            np.random.shuffle(self.indexes)
+            np.random.shuffle(self.indexes_x)
+            np.random.shuffle(self.indexes_y)
 
     def __getitem__(self, index):
         indexes_x = self.indexes_x[index * self.batch_size:(index + 1) * self.batch_size]
