@@ -61,7 +61,7 @@ class TFModelBase:
         return self
 
     def save_model(self, filepath):
-        self.model.save(filepath)
+        self.model.save(filepath, save_format='tf')
         return self
 
     def freeze_graph(self, save_dir=None, model_name=None, as_text=False):
