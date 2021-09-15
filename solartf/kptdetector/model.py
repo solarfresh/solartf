@@ -47,8 +47,7 @@ class TFResNet(TFModelBase):
     def build_model(self):
         img_height, img_width, _ = self.input_shape
         image_input = Input(shape=self.input_shape, name='image_input')
-        backbone = self.backbone.call(image_input)
-        x = backbone.layers[-1].output
+        x = self.backbone(image_input)
         x = self.dropout(x)
         x = GlobalAveragePooling2D()(x)
         cls = Dense(units=self.n_classes, activation='sigmoid', name='cls_output')(x)
