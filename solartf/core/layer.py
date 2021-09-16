@@ -2,10 +2,80 @@ from __future__ import division
 import logging
 import tensorflow as tf
 import tensorflow.keras.backend as K
-from tensorflow.keras.layers import (InputSpec, Layer)
+from tensorflow.python.keras import backend
+from tensorflow.python.keras.utils import conv_utils
+from tensorflow.python.keras import layers
+from tensorflow.python.framework import tensor_shape
 
 
-class GaussianBlur(Layer):
+class CorrectZeroPadding(layers.Layer):
+    def __init__(self,
+                 kernel_size=1,
+                 data_format=None,
+                 **kwargs):
+        super(CorrectZeroPadding, self).__init__(**kwargs)
+
+        self.data_format = conv_utils.normalize_data_format(data_format)
+        self.input_spec = layers.InputSpec(ndim=4)
+
+        self.img_dim = 2 if K.image_data_format() == 'channels_first' else 1
+
+        if isinstance(kernel_size, int):
+            self.kernel_size = (kernel_size, kernel_size)
+        else:
+            self.kernel_size = kernel_size
+
+    def build(self, input_shape):
+        self.input_spec = layers.InputSpec(shape=input_shape)
+
+    def call(self, inputs, *args, **kwargs):
+        input_size = K.int_shape(inputs)[self.img_dim:(self.img_dim + 2)]
+
+        if input_size[0] is None:
+            adjust = (1, 1)
+        else:
+            adjust = (1 - input_size[0] % 2, 1 - input_size[1] % 2)
+        correct = (self.kernel_size[0] // 2, self.kernel_size[1] // 2)
+        padding = ((correct[0] - adjust[0], correct[0]),
+                   (correct[1] - adjust[1], correct[1]))
+        return backend.spatial_2d_padding(
+            inputs, padding=padding, data_format=self.data_format)
+
+    def compute_output_shape(self, input_shape):
+        input_shape = tensor_shape.TensorShape(input_shape).as_list()
+        if self.data_format == 'channels_first':
+            if input_shape[2] is not None:
+                rows = input_shape[2] + self.padding[0][0] + self.padding[0][1]
+            else:
+                rows = None
+            if input_shape[3] is not None:
+                cols = input_shape[3] + self.padding[1][0] + self.padding[1][1]
+            else:
+                cols = None
+            return tensor_shape.TensorShape(
+                [input_shape[0], input_shape[1], rows, cols])
+        elif self.data_format == 'channels_last':
+            if input_shape[1] is not None:
+                rows = input_shape[1] + self.padding[0][0] + self.padding[0][1]
+            else:
+                rows = None
+            if input_shape[2] is not None:
+                cols = input_shape[2] + self.padding[1][0] + self.padding[1][1]
+            else:
+                cols = None
+            return tensor_shape.TensorShape(
+                [input_shape[0], rows, cols, input_shape[3]])
+
+    def get_config(self):
+        config = {
+            'kernel_size': self.kernel_size
+        }
+        base_config = super(CorrectZeroPadding, self).get_config()
+        base_config.update(config)
+        return base_config
+
+
+class GaussianBlur(layers.Layer):
     def __init__(self, kernel_size: int, mu: float, sigma: float, **kwargs):
         super(GaussianBlur, self).__init__(**kwargs)
         self.kernel_size = kernel_size
@@ -13,7 +83,7 @@ class GaussianBlur(Layer):
         self.sigma = sigma
 
     def build(self, input_shape):
-        self.input_spec = InputSpec(shape=input_shape)
+        self.input_spec = layers.InputSpec(shape=input_shape)
         # self.mu = self.add_weight('mu',
         #                           shape=(1,),
         #                           initializer='random_normal',
@@ -63,7 +133,7 @@ class GaussianBlur(Layer):
         return base_config
 
 
-class GroupNormalization(Layer):
+class GroupNormalization(layers.Layer):
     """Group normalization layer.
     Source: "Group Normalization" (Yuxin Wu & Kaiming He, 2018)
     https://arxiv.org/abs/1803.08494
@@ -328,12 +398,12 @@ class GroupNormalization(Layer):
         return broadcast_shape
 
 
-class IntensityNormalization(Layer):
+class IntensityNormalization(layers.Layer):
     def __init__(self, **kwargs):
         super(IntensityNormalization, self).__init__(**kwargs)
 
     def build(self, input_shape):
-        self.input_spec = InputSpec(shape=input_shape)
+        self.input_spec = layers.InputSpec(shape=input_shape)
         super(IntensityNormalization, self).build(input_shape)
 
     def call(self, x, *args, **kwargs):
@@ -393,7 +463,7 @@ class InstanceNormalization(GroupNormalization):
         super().__init__(**kwargs)
 
 
-class ReflectionPadding2D(Layer):
+class ReflectionPadding2D(layers.Layer):
     """Implements Reflection Padding as a layer.
 
     Args:

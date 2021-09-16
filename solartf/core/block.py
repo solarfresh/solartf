@@ -3,8 +3,136 @@ from tensorflow.keras.initializers import RandomNormal
 from tensorflow.keras import layers
 from tensorflow.keras.regularizers import l2
 from .activation import hard_sigmoid
-from .layer import (InstanceNormalization, ReflectionPadding2D)
+from . import layer as solartf_layers
 from .util import (correct_pad, get_filter_nb_by_depth)
+
+
+class Conv2DBlock(layers.Layer):
+    def __init__(self,
+                 filters,
+                 kernel_size=3,
+                 padding='same',
+                 use_bias=False,
+                 batch_normalization=True,
+                 normalize_axis=0,
+                 normalize_epsilon=1e-3,
+                 normalize_momentum=0.999,
+                 activation=None,
+                 **kwargs):
+        super(Conv2DBlock, self).__init__(**kwargs)
+        self.filters = filters
+        self.kernel_size = kernel_size
+        self.padding = padding
+        self.use_bias = use_bias
+        self.batch_normalization = batch_normalization
+        self.normalize_axis = normalize_axis
+        self.normalize_epsilon = normalize_epsilon
+        self.normalize_momentum = normalize_momentum
+        self.activation = activation
+
+        self.conv = layers.Conv2D(filters=self.filters,
+                                  kernel_size=self.kernel_size,
+                                  padding=self.padding,
+                                  use_bias=self.use_bias)
+        self.batch_normalization_layer = layers.BatchNormalization(
+            axis=self.normalize_axis,
+            epsilon=self.normalize_epsilon,
+            momentum=self.normalize_momentum
+        )
+        self.activation_layer = layers.Activation(activation) if activation is not None else None
+
+    def build(self, input_shape):
+        self.input_spec = layers.InputSpec(shape=input_shape)
+
+    def call(self, x, *args, **kwargs):
+        x = self.conv(x)
+
+        if self.batch_normalization:
+            x = self.batch_normalization_layer(x)
+
+        if self.activation is not None:
+            x = self.activation_layer(x)
+
+        return x
+
+    def get_config(self):
+        config = {
+            'filters': self.filters,
+            'kernel_size': self.kernel_size,
+            'padding': self.padding,
+            'use_bias': self.use_bias,
+            'self.batch_normalization': self.self.batch_normalization,
+            'normalize_axis': self.normalize_axis,
+            'normalize_epsilon': self.normalize_epsilon,
+            'normalize_momentum': self.normalize_momentum,
+            'activation': self.activation
+        }
+        base_config = super(Conv2DBlock, self).get_config()
+        base_config.update(config)
+        return base_config
+
+
+class DepthwiseConv2DBlock(layers.Layer):
+    def __init__(self,
+                 kernel_size=3,
+                 padding='same',
+                 use_bias=False,
+                 batch_normalization=True,
+                 normalize_axis=0,
+                 normalize_epsilon=1e-3,
+                 normalize_momentum=0.999,
+                 activation=None,
+                 **kwargs):
+        super(DepthwiseConv2DBlock, self).__init__(**kwargs)
+        self.kernel_size = kernel_size
+        self.padding = padding
+        self.use_bias = use_bias
+        self.batch_normalization = batch_normalization
+        self.normalize_axis = normalize_axis
+        self.normalize_epsilon = normalize_epsilon
+        self.normalize_momentum = normalize_momentum
+        self.activation = activation
+
+        self.conv = layers.DepthwiseConv2D(
+            kernel_size=self.kernel_size,
+            padding=self.padding,
+            use_bias=self.use_bias)
+        self.batch_normalization_layer = layers.BatchNormalization(
+            axis=self.normalize_axis,
+            epsilon=self.normalize_epsilon,
+            momentum=self.normalize_momentum
+        )
+        self.activation_layer = layers.Activation(activation) if activation is not None else None
+
+    def build(self, input_shape):
+        self.input_spec = layers.InputSpec(shape=input_shape)
+
+    def call(self, x, *args, **kwargs):
+        x = self.conv(x)
+
+        if self.batch_normalization:
+            x = self.batch_normalization_layer(x)
+
+        if self.activation is not None:
+            x = self.activation_layer(x)
+
+        return x
+
+    def get_config(self):
+        config = {
+            'filters': self.filters,
+            'kernel_size': self.kernel_size,
+            'padding': self.padding,
+            'use_bias': self.use_bias,
+            'self.batch_normalization': self.self.batch_normalization,
+            'normalize_axis': self.normalize_axis,
+            'normalize_epsilon': self.normalize_epsilon,
+            'normalize_momentum': self.normalize_momentum,
+            'activation': self.activation
+        }
+        base_config = super(DepthwiseConv2DBlock, self).get_config()
+        base_config.update(config)
+        return base_config
 
 
 class DownsampleBlock(layers.Layer):
@@ -39,7 +167,7 @@ class DownsampleBlock(layers.Layer):
             padding=self.padding,
             use_bias=self.use_bias,
         )
-        self.inst_norm = InstanceNormalization(gamma_initializer=self.gamma_initializer)
+        self.inst_norm = solartf_layers.InstanceNormalization(gamma_initializer=self.gamma_initializer)
 
     def build(self, input_shape):
         self.input_spec = layers.InputSpec(shape=input_shape)
@@ -63,6 +191,85 @@ class DownsampleBlock(layers.Layer):
             'gamma_initializer': self.gamma_initializer,
         }
         base_config = super(DownsampleBlock, self).get_config()
+        base_config.update(config)
+        return base_config
+
+
+class InvertedResBlock(layers.Layer):
+    def __init__(self,
+                 infilters,
+                 expansion,
+                 filters,
+                 kernel_size,
+                 stride,
+                 se_ratio=None,
+                 **kwargs):
+        super(InvertedResBlock, self).__init__(**kwargs)
+        self.channel_axis = 1 if K.image_data_format() == 'channels_first' else -1
+        self.infilters = infilters
+        self.expansion = expansion
+        self.filters = filters
+        self.kernel_size= kernel_size
+        self.stride = stride
+        self.se_ratio = se_ratio
+
+        self.conv_expand = Conv2DBlock(
+            filters=get_filter_nb_by_depth(self.infilters * self.expansion),
+            kernel_size=1,
+            padding='same',
+            use_bias=False,
+            normalize_axis=self.channel_axis,
+            normalize_epsilon=1e-3,
+            normalize_momentum=0.999,
+            activation='relu'
+        )
+        self.zero_padding = solartf_layers.CorrectZeroPadding(
+            kernel_size=self.kernel_size,
+        )
+        self.depthwise_conv = DepthwiseConv2DBlock(
+            kernel_size=self.kernel_size,
+            strides=self.strides,
+            padding='same',
+            use_bias=False,
+            normalize_axis=self.channel_axis,
+            normalize_epsilon=1e-3,
+            normalize_momentum=0.999,
+            activation='relu'
+        )
+
+    def build(self, input_shape):
+        self.input_spec = layers.InputSpec(shape=input_shape)
+
+    def call(self, x, *args, **kwargs):
+        shortcut = x
+
+        x = self.conv_expand(x)
+        if self.stride == 2:
+            x = self.zero_padding(x)
+
+        x = self.depthwise_conv(x)
+
+        if self.se_ratio:
+            x = se_block(x, get_filter_nb_by_depth(infilters * expansion), se_ratio, prefix)
+
+        x = layers.Conv2D(filters,
+                          kernel_size=1,
+                          padding='same',
+                          use_bias=False,
+                          name=prefix + 'project')(x)
+        x = layers.BatchNormalization(axis=channel_axis,
+                                      epsilon=1e-3,
+                                      momentum=0.999,
+                                      name=prefix + 'project/BatchNorm')(x)
+
+        if stride == 1 and infilters == filters:
+            x = layers.Add(name=prefix + 'Add')([shortcut, x])
+        return x
+
+    def get_config(self):
+        config = {
+        }
+        base_config = super(InvertedResBlock, self).get_config()
         base_config.update(config)
         return base_config
 
@@ -284,7 +491,7 @@ class ResidualBlock(layers.Layer):
         self.gamma_initializer = RandomNormal(mean=0.0, stddev=0.02) \
             if gamma_initializer is None else gamma_initializer
 
-        self.reflect_padding = ReflectionPadding2D()
+        self.reflect_padding = solartf_layers.ReflectionPadding2D()
         self.conv = layers.Conv2D(
             self.filters,
             self.kernel_size,
@@ -294,7 +501,7 @@ class ResidualBlock(layers.Layer):
             use_bias=self.use_bias,
         )
 
-        self.inst_norm = InstanceNormalization(gamma_initializer=self.gamma_initializer)
+        self.inst_norm = solartf_layers.InstanceNormalization(gamma_initializer=self.gamma_initializer)
 
     def build(self, input_shape):
         self.input_spec = layers.InputSpec(shape=input_shape)
@@ -381,7 +588,7 @@ class UpsampleBlock(layers.Layer):
             padding=self.padding,
             use_bias=self.use_bias,
         )
-        self.inst_norm = InstanceNormalization(gamma_initializer=self.gamma_initializer)
+        self.inst_norm = solartf_layers.InstanceNormalization(gamma_initializer=self.gamma_initializer)
 
     def build(self, input_shape):
         self.input_spec = layers.InputSpec(shape=input_shape)
