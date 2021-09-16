@@ -15,7 +15,7 @@ from solartf.core.loss import smooth_L1_loss
 class Config(ResNetV2Config):
 
     # train or freeze or show or partial_freeze or inference
-    STATUS = 'train'
+    STATUS = 'show'
     # MODEL_WEIGHT_PATH = '/Users/huangshangyu/Downloads/model/kptdetector/' \
     #                     'kptdetector-00500_loss-0.0807_val_loss-0.0901_cls_output_loss-0.0000_val_cls_output_loss-0.0000_kpt_output_loss-0.0057_val_kpt_output_loss-0.0151.h5'
     MODEL_WEIGHT_PATH = None

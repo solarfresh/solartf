@@ -135,8 +135,6 @@ class ResNetBlock(layers.Layer):
                  kernel_size=3,
                  kernel_initializer='he_normal',
                  kernel_regularizer=l2(1e-4),
-                 activation=None,
-                 normalization=None,
                  stage_index=0,
                  block_index=0,
                  **kwargs):
@@ -146,27 +144,32 @@ class ResNetBlock(layers.Layer):
         self.kernel_size = kernel_size
         self.kernel_initializer = kernel_initializer
         self.kernel_regularizer = kernel_regularizer
-        self.activation = activation
-        self.normalization = normalization
+        # todo: to correct activation functions
+        self.activation_in = layers.Activation('relu')
+        self.activation_middle = layers.Activation('relu')
+        self.activation_out = layers.Activation('relu')
+        self.normalization_in = layers.BatchNormalization()
+        self.normalization_middle = layers.BatchNormalization()
+        self.normalization_out = layers.BatchNormalization()
         self.stage_index = stage_index
         self.block_index = block_index
 
         self.conv_in = layers.Conv2D(self.num_filters_in,
-                                     kernel_size=kernel_size,
+                                     kernel_size=1,
                                      strides=1,
                                      padding='same',
                                      kernel_initializer=self.kernel_initializer,
                                      kernel_regularizer=self.kernel_regularizer)
         self.conv_middle = layers.Conv2D(
             self.num_filters_in,
-            kernel_size=kernel_size,
+            kernel_size=self.kernel_size,
             strides=1,
             padding='same',
             kernel_initializer=self.kernel_initializer,
             kernel_regularizer=self.kernel_regularizer)
         self.conv_in_downsample = layers.Conv2D(
             self.num_filters_in,
-            kernel_size=kernel_size,
+            kernel_size=1,
             strides=2,
             padding='same',
             kernel_initializer=self.kernel_initializer,
@@ -177,6 +180,13 @@ class ResNetBlock(layers.Layer):
                                       padding='same',
                                       kernel_initializer=self.kernel_initializer,
                                       kernel_regularizer=self.kernel_regularizer)
+        self.conv_shortcut_out = layers.Conv2D(
+            self.num_filters_out,
+            kernel_size=1,
+            strides=1,
+            padding='same',
+            kernel_initializer=self.kernel_initializer,
+            kernel_regularizer=self.kernel_regularizer)
         self.conv_out_downsample = layers.Conv2D(
             self.num_filters_out,
             kernel_size=1,
@@ -190,8 +200,8 @@ class ResNetBlock(layers.Layer):
 
     def call(self, x, *args, **kwargs):
 
-        activation = self.activation
-        normalization = self.normalization
+        activation = self.activation_in
+        normalization = self.normalization_in
         conv = self.conv_in
         if self.stage_index == 0:
             if self.block_index == 0:
@@ -208,24 +218,30 @@ class ResNetBlock(layers.Layer):
                               normalization=normalization,)
         y = self._resnet_conv(inputs=y,
                               conv=self.conv_middle,
-                              activation=self.activation,
-                              normalization=self.normalization,)
+                              activation=self.activation_middle,
+                              normalization=self.normalization_middle,)
         y = self._resnet_conv(inputs=y,
                               conv=self.conv_out,
-                              activation=self.activation,
-                              normalization=self.normalization,)
+                              activation=self.activation_out,
+                              normalization=self.normalization_out,)
         if self.block_index == 0:
             # linear projection residual shortcut connection to match
             # changed dims
             x = self._resnet_conv(
                 inputs=x,
-                conv=self.conv_out_downsample if self.stage_index > 0 else self.conv_out,
+                conv=self.conv_out_downsample if self.stage_index > 0 else self.conv_shortcut_out,
                 activation=None,
                 normalization=None)
         return layers.add([x, y])
 
     def get_config(self):
-        config = {}
+        config = {
+            'num_filters_in': self.self.num_filters_in,
+            'num_filters_out': self.num_filters_out,
+            'kernel_size': self.kernel_size,
+            'stage_index': self.stage_index,
+            'block_index': self.block_index
+        }
         base_config = super(ResNetBlock, self).get_config()
         base_config.update(config)
         return base_config
@@ -246,51 +262,6 @@ class ResNetBlock(layers.Layer):
         x = conv(x)
 
         return x
-
-
-def resnet_block(inputs,
-                 num_filters=16,
-                 kernel_size=3,
-                 strides=1,
-                 activation='relu',
-                 batch_normalization=True,
-                 conv_first=True):
-    """2D Convolution-Batch Normalization-Activation stack builder
-
-    # Arguments
-        inputs (tensor): input tensor from input image or previous layer
-        num_filters (int): Conv2D number of filters
-        kernel_size (int): Conv2D square kernel dimensions
-        strides (int): Conv2D square stride dimensions
-        activation (string): activation name
-        batch_normalization (bool): whether to include batch normalization
-        conv_first (bool): conv-bn-activation (True) or
-            bn-activation-conv (False)
-
-    # Returns
-        x (tensor): tensor as input to the next layer
-    """
-    conv = layers.Conv2D(num_filters,
-                         kernel_size=kernel_size,
-                         strides=strides,
-                         padding='same',
-                         kernel_initializer='he_normal',
-                         kernel_regularizer=l2(1e-4))
-
-    x = inputs
-    if conv_first:
-        x = conv(x)
-        if batch_normalization:
-            x = layers.BatchNormalization()(x)
-        if activation is not None:
-            x = layers.Activation(activation)(x)
-    else:
-        if batch_normalization:
-            x = layers.BatchNormalization()(x)
-        if activation is not None:
-            x = layers.Activation(activation)(x)
-        x = conv(x)
-    return x
 
 
 class ResidualBlock(layers.Layer):

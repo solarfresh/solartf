@@ -280,7 +280,8 @@ class ResNetV2(tf.keras.Model):
                 self.resnet_blocks.append(ResNetBlock(num_filters_in=num_filters_in,
                                                       num_filters_out=num_filters_out,
                                                       stage_index=stage_index,
-                                                      block_index=block_index))
+                                                      block_index=block_index,
+                                                      ))
             num_filters_in = num_filters_out
 
     def call(self, inputs, training=None, mask=None):
