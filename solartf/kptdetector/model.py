@@ -3,27 +3,24 @@ from tensorflow.keras.layers import (Dense, Dropout, GlobalAveragePooling2D, Inp
 from tensorflow.keras.losses import (binary_crossentropy, mse)
 from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
+from solartf.core import graph
 from solartf.core.model import TFModelBase
-from solartf.core.graph import ResNetV2
 
 
-class TFResNet(TFModelBase):
+class TFKeypointNet(TFModelBase):
     def __init__(self,
                  input_shape,
                  n_classes,
-                 num_res_blocks=3,
-                 num_stage=3,
-                 num_filters_in=16,
+                 backbone=None,
                  dropout_rate=.3):
         self.input_shape = input_shape
         self.n_classes = n_classes
 
-        self.num_res_blocks = num_res_blocks
-        self.num_stage = num_stage
-        self.num_filters_in = num_filters_in
-        self.backbone = ResNetV2(num_res_blocks=self.num_res_blocks,
-                                 num_stage=self.num_stage,
-                                 num_filters_in=self.num_filters_in)
+        self.backbone = graph.ResNetV2(
+            num_res_blocks=3,
+            num_stage=3,
+            num_filters_in=16,
+        ) if backbone is None else backbone
         self.dropout_rate = dropout_rate
         self.dropout = Dropout(rate=dropout_rate)
 
