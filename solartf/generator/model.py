@@ -106,6 +106,17 @@ class CycleGan(TFModelBase):
 
         return self
 
+    def load_model(self, filepath, custom_objects=None):
+        cycle_gan_loss = CycleGANLoss()
+        self.model = tf.keras.models.load_model(filepath, custom_objects={
+            'ResnetGenerator': ResnetGenerator,
+            'Discriminator': Discriminator,
+            'IntensityNormalization': IntensityNormalization,
+            'gen_loss': cycle_gan_loss.gen_loss,
+            'disc_loss': cycle_gan_loss.disc_loss
+        })
+        return self
+    
     def compile(self, optimizer=None, loss=None, metrics=None, loss_weights=None):
         optimizer = Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=5e-04) \
             if optimizer is None else optimizer

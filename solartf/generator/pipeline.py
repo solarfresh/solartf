@@ -20,6 +20,20 @@ class CycleGANPipeline(TFPipelineBase):
     def inference(self, dataset_type='test'):
         pass
 
+    def load_model(self):
+        self.model = self.config.MODEL
+        self.model.build_model()
+
+        if self.config.MODEL_WEIGHT_PATH is not None:
+            self.model.load_model(self.config.MODEL_WEIGHT_PATH)
+
+        self.model.compile(optimizer=self.config.TRAIN_OPTIMIZER,
+                           loss=self.config.TRAIN_LOSS,
+                           metrics=self.config.TRAIN_METRIC,
+                           loss_weights=self.config.TRAIN_LOSS_WEIGHTS)
+
+        return self
+
     def load_dataset(self):
         if self.model is None:
             raise ValueError(f'model must be load before loading datasets')
