@@ -1,6 +1,7 @@
 from tensorflow.keras import (losses, optimizers)
 from tensorflow.keras.callbacks import ModelCheckpoint
-from .model import TFResNet
+from solartf.core import graph
+from .model import TFKeypointNet
 
 
 class ResNetV2Config:
@@ -54,11 +55,19 @@ class ResNetV2Config:
 
     TEST_BATCH_SIZE = 1
 
-    MODEL = TFResNet(input_shape=IMAGE_SHAPE,
-                     n_classes=CLASS_NUMBER,
-                     num_res_blocks=3,
-                     num_filters_in=16,
-                     dropout_rate=.3)
+    MODEL = TFKeypointNet(
+        input_shape=IMAGE_SHAPE,
+        n_classes=CLASS_NUMBER,
+        backbone=graph.ResNetV2(
+            num_res_blocks=3,
+            num_stage=3,
+            num_filters_in=16,
+        ),
+        dropout_rate=.3
+    )
+    CUSTOM_OBJECTS = {
+        'ResNetV2': graph.ResNetV2
+    }
     MODEL_WEIGHT_PATH = None
     MODEL_CUSTOM_OBJECTS = None
 

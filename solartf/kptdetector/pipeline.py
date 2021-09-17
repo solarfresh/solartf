@@ -6,10 +6,9 @@ from .generator import KeypointDirectoryGenerator
 
 class KeypointDetectPipeline(TFPipelineBase):
     def inference(self, output_shape=None, dataset_type='test'):
+        self.load_model().load_dataset()
         if output_shape is None:
             output_shape = self.model.input_shape
-
-        self.load_model().load_dataset()
 
         result_list = []
         for image_input_list, kpt_input_list in self.dataset[dataset_type]:
