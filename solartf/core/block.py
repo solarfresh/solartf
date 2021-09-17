@@ -37,12 +37,16 @@ class Conv2DBlock(layers.Layer):
                                   strides=self.strides,
                                   padding=self.padding,
                                   use_bias=self.use_bias)
-        self.batch_normalization_layer = layers.BatchNormalization(
-            axis=self.normalize_axis,
-            epsilon=self.normalize_epsilon,
-            momentum=self.normalize_momentum
-        )
-        self.activation_layer = layers.Activation(activation) if activation is not None else None
+
+        if self.batch_normalization is not None:
+            self.batch_normalization_layer = layers.BatchNormalization(
+                axis=self.normalize_axis,
+                epsilon=self.normalize_epsilon,
+                momentum=self.normalize_momentum
+            )
+
+        if self.activation is not None:
+            self.activation_layer = layers.Activation(activation)
 
     def build(self, input_shape):
         self.input_spec = layers.InputSpec(shape=input_shape)
@@ -50,7 +54,7 @@ class Conv2DBlock(layers.Layer):
     def call(self, x, *args, **kwargs):
         x = self.conv(x)
 
-        if self.batch_normalization:
+        if self.batch_normalization is not None:
             x = self.batch_normalization_layer(x)
 
         if self.activation is not None:
@@ -65,7 +69,7 @@ class Conv2DBlock(layers.Layer):
             'strides': self.strides,
             'padding': self.padding,
             'use_bias': self.use_bias,
-            'self.batch_normalization': self.self.batch_normalization,
+            'batch_normalization': self.batch_normalization,
             'normalize_axis': self.normalize_axis,
             'normalize_epsilon': self.normalize_epsilon,
             'normalize_momentum': self.normalize_momentum,
@@ -104,12 +108,16 @@ class DepthwiseConv2DBlock(layers.Layer):
             strides=self.strides,
             padding=self.padding,
             use_bias=self.use_bias)
-        self.batch_normalization_layer = layers.BatchNormalization(
-            axis=self.normalize_axis,
-            epsilon=self.normalize_epsilon,
-            momentum=self.normalize_momentum
-        )
-        self.activation_layer = layers.Activation(activation) if activation is not None else None
+
+        if self.batch_normalization is not None:
+            self.batch_normalization_layer = layers.BatchNormalization(
+                axis=self.normalize_axis,
+                epsilon=self.normalize_epsilon,
+                momentum=self.normalize_momentum
+            )
+
+        if self.activation is not None:
+            self.activation_layer = layers.Activation(activation)
 
     def build(self, input_shape):
         self.input_spec = layers.InputSpec(shape=input_shape)
@@ -117,7 +125,7 @@ class DepthwiseConv2DBlock(layers.Layer):
     def call(self, x, *args, **kwargs):
         x = self.conv(x)
 
-        if self.batch_normalization:
+        if self.batch_normalization is not None:
             x = self.batch_normalization_layer(x)
 
         if self.activation is not None:
@@ -127,12 +135,11 @@ class DepthwiseConv2DBlock(layers.Layer):
 
     def get_config(self):
         config = {
-            'filters': self.filters,
             'kernel_size': self.kernel_size,
             'strides': self.strides,
             'padding': self.padding,
             'use_bias': self.use_bias,
-            'self.batch_normalization': self.self.batch_normalization,
+            'batch_normalization': self.batch_normalization,
             'normalize_axis': self.normalize_axis,
             'normalize_epsilon': self.normalize_epsilon,
             'normalize_momentum': self.normalize_momentum,
@@ -231,9 +238,11 @@ class InvertedResBlock(layers.Layer):
             normalize_momentum=0.999,
             activation='relu'
         )
-        self.zero_padding = solartf_layers.CorrectZeroPadding(
-            kernel_size=self.kernel_size,
-        )
+        if self.strides == 2:
+            self.zero_padding = solartf_layers.CorrectZeroPadding(
+                kernel_size=self.kernel_size,
+            )
+
         self.depthwise_conv = DepthwiseConv2DBlock(
             kernel_size=self.kernel_size,
             strides=self.strides,

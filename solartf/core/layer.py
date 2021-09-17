@@ -351,7 +351,7 @@ class GroupNormalization(layers.Layer):
     def _create_input_spec(self, input_shape):
 
         dim = input_shape[self.axis]
-        self.input_spec = tf.keras.layers.InputSpec(
+        self.input_spec = layers.InputSpec(
             ndim=len(input_shape), axes={self.axis: dim}
         )
 
