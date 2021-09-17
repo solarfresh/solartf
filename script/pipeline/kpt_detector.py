@@ -7,15 +7,16 @@ from tensorflow.keras.callbacks import ModelCheckpoint
 from tensorflow.keras.layers import Concatenate
 from solartf.kptdetector.pipeline import KeypointDetectPipeline
 from solartf.kptdetector.config import ResNetV2Config
-from solartf.kptdetector.model import TFResNet
+from solartf.kptdetector.model import TFKeypointNet
 from solartf.kptdetector.processor import KeypointAugmentation
+from solartf.core import graph
 from solartf.core.loss import smooth_L1_loss
 
 
 class Config(ResNetV2Config):
 
     # train or freeze or show or partial_freeze or inference
-    STATUS = 'train'
+    STATUS = 'show'
     # MODEL_WEIGHT_PATH = '/Users/huangshangyu/Downloads/model/kptdetector/' \
     #                     'kptdetector-00500_loss-0.0807_val_loss-0.0901_cls_output_loss-0.0000_val_cls_output_loss-0.0000_kpt_output_loss-0.0057_val_kpt_output_loss-0.0151.h5'
     MODEL_WEIGHT_PATH = None
@@ -62,12 +63,18 @@ class Config(ResNetV2Config):
 
     IMAGE_SHAPE = (64, 64, 3)
     CLASS_NUMBER = 4
-    MODEL = TFResNet(input_shape=IMAGE_SHAPE,
-                     n_classes=CLASS_NUMBER,
-                     num_res_blocks=3,
-                     num_stage=5,
-                     num_filters_in=16,
-                     dropout_rate=.3)
+    MODEL = TFKeypointNet(
+        input_shape=IMAGE_SHAPE,
+        n_classes=CLASS_NUMBER,
+        backbone=graph.MobileNetV3Small(
+            last_point_ch=128,
+            alpha=1.0
+        ),
+        dropout_rate=.3
+    )
+    CUSTOM_OBJECTS = {
+        'MobileNetV3Small': graph.MobileNetV3Small
+    }
 
     TRAIN_OPTIMIZER = optimizers.Adam(learning_rate=1e-3, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=5e-04)
     TRAIN_MODEL_CHECKPOINT_PATH = '/Users/huangshangyu/Downloads/model/kptdetector/kptdetector-{epoch:05d}' \

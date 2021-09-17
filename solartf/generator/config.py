@@ -1,5 +1,6 @@
 from tensorflow.keras import optimizers
 from tensorflow.keras.callbacks import ModelCheckpoint
+from solartf.core import graph
 from .loss import CycleGANLoss
 from .model import CycleGan
 
@@ -25,7 +26,11 @@ class CycleGANConfig:
     TEST_SHUFFLE = False
 
     MODEL = CycleGan(input_shape_x=IMAGE_SHAPE_X,
-                     input_shape_y=IMAGE_SHAPE_Y)
+                     input_shape_y=IMAGE_SHAPE_Y,
+                     generator_G=graph.ResnetGenerator(prefix='generator_G'),
+                     generator_F=graph.ResnetGenerator(prefix='generator_F'),
+                     discriminator_X=graph.Discriminator(prefix='discriminator_X'),
+                     discriminator_Y=graph.Discriminator(prefix='discriminator_Y'))
 
     TRAIN_OPTIMIZER = optimizers.Adam(learning_rate=0.0001, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=5e-04)
 
@@ -35,6 +40,12 @@ class CycleGANConfig:
         'gen_y': cycle_gan_loss.gen_loss,
         'disc_x': cycle_gan_loss.disc_loss,
         'disc_y': cycle_gan_loss.disc_loss
+    }
+    CUSTOM_OBJECTS = {
+        'ResnetGenerator': graph.ResnetGenerator,
+        'Discriminator': graph.Discriminator,
+        'gen_loss': cycle_gan_loss.gen_loss,
+        'disc_loss': cycle_gan_loss.disc_loss
     }
     TRAIN_LOSS_WEIGHTS = None
 

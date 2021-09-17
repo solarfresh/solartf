@@ -70,9 +70,8 @@ class TFPipelineBase:
         self.model.build_model()
 
         if self.config.MODEL_WEIGHT_PATH is not None:
-            self.model.load_weights(self.config.MODEL_WEIGHT_PATH,
-                                    skip_mismatch=True,
-                                    by_name=True)
+            self.model.load_model(self.config.MODEL_WEIGHT_PATH,
+                                  custom_objects=self.config.CUSTOM_OBJECTS)
 
         self.model.compile(optimizer=self.config.TRAIN_OPTIMIZER,
                            loss=self.config.TRAIN_LOSS,
