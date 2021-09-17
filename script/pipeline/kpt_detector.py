@@ -66,13 +66,15 @@ class Config(ResNetV2Config):
     MODEL = TFKeypointNet(
         input_shape=IMAGE_SHAPE,
         n_classes=CLASS_NUMBER,
-        backbone=graph.ResNetV2(
-            num_res_blocks=3,
-            num_stage=5,
-            num_filters_in=16,
+        backbone=graph.MobileNetV3Small(
+            last_point_ch=128,
+            alpha=1.0
         ),
         dropout_rate=.3
     )
+    CUSTOM_OBJECTS = {
+        'MobileNetV3Small': graph.MobileNetV3Small
+    }
 
     TRAIN_OPTIMIZER = optimizers.Adam(learning_rate=1e-3, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=5e-04)
     TRAIN_MODEL_CHECKPOINT_PATH = '/Users/huangshangyu/Downloads/model/kptdetector/kptdetector-{epoch:05d}' \

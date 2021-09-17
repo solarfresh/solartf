@@ -1,5 +1,6 @@
 import numpy as np
-from tensorflow.keras.layers import (Dense, Dropout, GlobalAveragePooling2D, Input, Reshape)
+import tensorflow as tf
+from tensorflow.keras import layers
 from tensorflow.keras.losses import (binary_crossentropy, mse)
 from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
@@ -22,7 +23,6 @@ class TFKeypointNet(TFModelBase):
             num_filters_in=16,
         ) if backbone is None else backbone
         self.dropout_rate = dropout_rate
-        self.dropout = Dropout(rate=dropout_rate)
 
     def data_preprocess(self, inputs, training=True):
         image_input_list = inputs['image_input_list']
@@ -43,15 +43,15 @@ class TFKeypointNet(TFModelBase):
 
     def build_model(self):
         img_height, img_width, _ = self.input_shape
-        image_input = Input(shape=self.input_shape, name='image_input')
+        image_input = layers.Input(shape=self.input_shape, name='image_input')
         x = self.backbone(image_input)
-        x = self.dropout(x)
-        x = GlobalAveragePooling2D()(x)
-        cls = Dense(units=self.n_classes, activation='sigmoid', name='cls_output')(x)
-        x = Dense(units=512, activation='relu')(x)
-        x = self.dropout(x)
-        kpt = Dense(units=self.n_classes * 2, activation='sigmoid')(x)
-        kpt = Reshape(target_shape=(-1, 2), name='kpt_output')(kpt)
+        x = layers.Dropout(self.dropout_rate)(x)
+        x = layers.GlobalAveragePooling2D()(x)
+        cls = layers.Dense(units=self.n_classes, activation='sigmoid', name='cls_output')(x)
+        x = layers.Dense(units=512, activation='relu')(x)
+        x = layers.Dropout(self.dropout_rate)(x)
+        kpt = layers.Dense(units=self.n_classes * 2, activation='sigmoid')(x)
+        kpt = layers.Reshape(target_shape=(-1, 2), name='kpt_output')(kpt)
 
         predictions = {'cls': cls, 'kpt': kpt}
         self.model = Model(image_input, predictions)

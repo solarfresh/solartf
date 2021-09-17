@@ -26,7 +26,8 @@ class CycleGan(TFModelBase):
         self.gen_F = generator_F if generator_F is not None else ResnetGenerator(prefix='generator_F')
         self.disc_X = discriminator_X if discriminator_X is not None else Discriminator(prefix='discriminator_X')
         self.disc_Y = discriminator_Y if discriminator_Y is not None else Discriminator(prefix='discriminator_Y')
-        self.intensity_norm = IntensityNormalization()
+        self.intensity_norm_x = IntensityNormalization()
+        self.intensity_norm_y = IntensityNormalization()
 
         self.gen_x_shape = None
         self.gen_y_shape = None
@@ -62,8 +63,8 @@ class CycleGan(TFModelBase):
     def build_model(self):
         real_x = Input(shape=self.input_shape_x, name='real_x')
         real_y = Input(shape=self.input_shape_y, name='real_y')
-        real_x_norm = self.intensity_norm(real_x)
-        real_y_norm = self.intensity_norm(real_y)
+        real_x_norm = self.intensity_norm_x(real_x)
+        real_y_norm = self.intensity_norm_y(real_y)
 
         fake_y_norm = self.gen_G(real_x_norm)
         fake_x_norm = self.gen_F(real_y_norm)
@@ -106,17 +107,6 @@ class CycleGan(TFModelBase):
 
         return self
 
-    def load_model(self, filepath, custom_objects=None):
-        cycle_gan_loss = CycleGANLoss()
-        self.model = tf.keras.models.load_model(filepath, custom_objects={
-            'ResnetGenerator': ResnetGenerator,
-            'Discriminator': Discriminator,
-            'IntensityNormalization': IntensityNormalization,
-            'gen_loss': cycle_gan_loss.gen_loss,
-            'disc_loss': cycle_gan_loss.disc_loss
-        })
-        return self
-    
     def compile(self, optimizer=None, loss=None, metrics=None, loss_weights=None):
         optimizer = Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=5e-04) \
             if optimizer is None else optimizer

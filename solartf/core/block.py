@@ -2,7 +2,7 @@ from tensorflow.keras import backend as K
 from tensorflow.keras.initializers import RandomNormal
 from tensorflow.keras import layers
 from tensorflow.keras.regularizers import l2
-from .activation import hard_sigmoid
+from . import activation as solar_activation
 from . import layer as solartf_layers
 from .util import (correct_pad, get_filter_nb_by_depth)
 
@@ -11,6 +11,7 @@ class Conv2DBlock(layers.Layer):
     def __init__(self,
                  filters,
                  kernel_size=3,
+                 strides=1,
                  padding='same',
                  use_bias=False,
                  batch_normalization=True,
@@ -22,6 +23,7 @@ class Conv2DBlock(layers.Layer):
         super(Conv2DBlock, self).__init__(**kwargs)
         self.filters = filters
         self.kernel_size = kernel_size
+        self.strides = strides
         self.padding = padding
         self.use_bias = use_bias
         self.batch_normalization = batch_normalization
@@ -32,6 +34,7 @@ class Conv2DBlock(layers.Layer):
 
         self.conv = layers.Conv2D(filters=self.filters,
                                   kernel_size=self.kernel_size,
+                                  strides=self.strides,
                                   padding=self.padding,
                                   use_bias=self.use_bias)
         self.batch_normalization_layer = layers.BatchNormalization(
@@ -59,6 +62,7 @@ class Conv2DBlock(layers.Layer):
         config = {
             'filters': self.filters,
             'kernel_size': self.kernel_size,
+            'strides': self.strides,
             'padding': self.padding,
             'use_bias': self.use_bias,
             'self.batch_normalization': self.self.batch_normalization,
@@ -75,6 +79,7 @@ class Conv2DBlock(layers.Layer):
 class DepthwiseConv2DBlock(layers.Layer):
     def __init__(self,
                  kernel_size=3,
+                 strides=1,
                  padding='same',
                  use_bias=False,
                  batch_normalization=True,
@@ -85,6 +90,7 @@ class DepthwiseConv2DBlock(layers.Layer):
                  **kwargs):
         super(DepthwiseConv2DBlock, self).__init__(**kwargs)
         self.kernel_size = kernel_size
+        self.strides = strides
         self.padding = padding
         self.use_bias = use_bias
         self.batch_normalization = batch_normalization
@@ -95,6 +101,7 @@ class DepthwiseConv2DBlock(layers.Layer):
 
         self.conv = layers.DepthwiseConv2D(
             kernel_size=self.kernel_size,
+            strides=self.strides,
             padding=self.padding,
             use_bias=self.use_bias)
         self.batch_normalization_layer = layers.BatchNormalization(
@@ -122,6 +129,7 @@ class DepthwiseConv2DBlock(layers.Layer):
         config = {
             'filters': self.filters,
             'kernel_size': self.kernel_size,
+            'strides': self.strides,
             'padding': self.padding,
             'use_bias': self.use_bias,
             'self.batch_normalization': self.self.batch_normalization,
@@ -201,7 +209,7 @@ class InvertedResBlock(layers.Layer):
                  expansion,
                  filters,
                  kernel_size,
-                 stride,
+                 strides,
                  se_ratio=None,
                  **kwargs):
         super(InvertedResBlock, self).__init__(**kwargs)
@@ -210,7 +218,7 @@ class InvertedResBlock(layers.Layer):
         self.expansion = expansion
         self.filters = filters
         self.kernel_size= kernel_size
-        self.stride = stride
+        self.strides = strides
         self.se_ratio = se_ratio
 
         self.conv_expand = Conv2DBlock(
@@ -236,6 +244,22 @@ class InvertedResBlock(layers.Layer):
             normalize_momentum=0.999,
             activation='relu'
         )
+        self.conv_out = Conv2DBlock(
+            filters=self.filters,
+            kernel_size=1,
+            padding='same',
+            use_bias=False,
+            normalize_axis=self.channel_axis,
+            normalize_epsilon=1e-3,
+            normalize_momentum=0.999,
+            activation=None
+        )
+
+        if self.se_ratio:
+            self.se_block = SEBlock(
+                filters=get_filter_nb_by_depth(self.infilters * self.expansion),
+                se_ratio=self.se_ratio
+            )
 
     def build(self, input_shape):
         self.input_spec = layers.InputSpec(shape=input_shape)
@@ -244,95 +268,32 @@ class InvertedResBlock(layers.Layer):
         shortcut = x
 
         x = self.conv_expand(x)
-        if self.stride == 2:
+        if self.strides == 2:
             x = self.zero_padding(x)
 
         x = self.depthwise_conv(x)
-
         if self.se_ratio:
-            x = se_block(x, get_filter_nb_by_depth(infilters * expansion), se_ratio, prefix)
+            x = self.se_block(x)
 
-        x = layers.Conv2D(filters,
-                          kernel_size=1,
-                          padding='same',
-                          use_bias=False,
-                          name=prefix + 'project')(x)
-        x = layers.BatchNormalization(axis=channel_axis,
-                                      epsilon=1e-3,
-                                      momentum=0.999,
-                                      name=prefix + 'project/BatchNorm')(x)
+        x = self.conv_out(x)
+        if self.strides == 1 and self.infilters == self.filters:
+            x = layers.add([shortcut, x])
 
-        if stride == 1 and infilters == filters:
-            x = layers.Add(name=prefix + 'Add')([shortcut, x])
         return x
 
     def get_config(self):
         config = {
+            'channel_axis': self.channel_axis,
+            'infilters': self.infilters,
+            'expansion': self.expansion,
+            'filters': self.filters,
+            'kernel_size': self.kernel_size,
+            'stride': self.strides,
+            'se_ratio': self.se_ratio
         }
         base_config = super(InvertedResBlock, self).get_config()
         base_config.update(config)
         return base_config
-
-
-def inverted_res_block(x,
-                       expansion,
-                       filters,
-                       kernel_size,
-                       stride,
-                       se_ratio,
-                       activation,
-                       name):
-
-    channel_axis = 1 if K.image_data_format() == 'channels_first' else -1
-    shortcut = x
-    prefix = 'expanded_conv/'
-    infilters = K.int_shape(x)[channel_axis]
-
-    if name:
-        # Expand
-        prefix = 'expanded_conv_{}/'.format(name)
-        x = layers.Conv2D(get_filter_nb_by_depth(infilters * expansion),
-                          kernel_size=1,
-                          padding='same',
-                          use_bias=False,
-                          name=prefix + 'expand')(x)
-        x = layers.BatchNormalization(axis=channel_axis,
-                                      epsilon=1e-3,
-                                      momentum=0.999,
-                                      name=prefix + 'expand/BatchNorm')(x)
-        x = activation(x)
-
-    if stride == 2:
-        x = layers.ZeroPadding2D(padding=correct_pad(x, kernel_size),
-                                 name=prefix + 'depthwise/pad')(x)
-
-    x = layers.DepthwiseConv2D(kernel_size,
-                               strides=stride,
-                               padding='same' if stride == 1 else 'valid',
-                               use_bias=False,
-                               name=prefix + 'depthwise')(x)
-    x = layers.BatchNormalization(axis=channel_axis,
-                                  epsilon=1e-3,
-                                  momentum=0.999,
-                                  name=prefix + 'depthwise/BatchNorm')(x)
-    x = activation(x)
-
-    if se_ratio:
-        x = se_block(x, get_filter_nb_by_depth(infilters * expansion), se_ratio, prefix)
-
-    x = layers.Conv2D(filters,
-                      kernel_size=1,
-                      padding='same',
-                      use_bias=False,
-                      name=prefix + 'project')(x)
-    x = layers.BatchNormalization(axis=channel_axis,
-                                  epsilon=1e-3,
-                                  momentum=0.999,
-                                  name=prefix + 'project/BatchNorm')(x)
-
-    if stride == 1 and infilters == filters:
-        x = layers.Add(name=prefix + 'Add')([shortcut, x])
-    return x
 
 
 class ResNetBlock(layers.Layer):
@@ -532,28 +493,52 @@ class ResidualBlock(layers.Layer):
         return base_config
 
 
-def se_block(inputs, filters, se_ratio, prefix):
-    x = layers.GlobalAveragePooling2D(name=prefix + 'squeeze_excite/AvgPool')(inputs)
+class SEBlock(layers.Layer):
+    def __init__(self,
+                 filters,
+                 se_ratio,
+                 **kwargs):
+        super(SEBlock, self).__init__(**kwargs)
+        self.filters = filters
+        self.se_ratio = se_ratio
 
-    if K.image_data_format() == 'channels_first':
-        x = layers.Reshape((filters, 1, 1))(x)
-    else:
-        x = layers.Reshape((1, 1, filters))(x)
+        self.global_pool = layers.GlobalAveragePooling2D()
+        if K.image_data_format() == 'channels_first':
+            self.reshape = layers.Reshape((self.filters, 1, 1))
+        else:
+            self.reshape = layers.Reshape((1, 1, self.filters))
 
-    x = layers.Conv2D(
-        get_filter_nb_by_depth(filters * se_ratio),
-        kernel_size=1,
-        padding='same',
-        name=prefix + 'squeeze_excite/Conv')(x)
-    x = layers.ReLU(name=prefix + 'squeeze_excite/Relu')(x)
-    x = layers.Conv2D(
-        filters,
-        kernel_size=1,
-        padding='same',
-        name=prefix + 'squeeze_excite/Conv_1')(x)
-    x = hard_sigmoid(x)
-    x = layers.Multiply(name=prefix + 'squeeze_excite/Mul')([inputs, x])
-    return x
+        self.conv_in = layers.Conv2D(
+            filters=get_filter_nb_by_depth(self.filters * self.se_ratio),
+            kernel_size=1,
+            padding='same',
+        )
+        self.activation_relu = layers.ReLU()
+        self.conv_out = layers.Conv2D(
+            filters=self.filters,
+            kernel_size=1,
+            padding='same',
+        )
+        self.activation_hard_sigmoid = solar_activation.HardSigmoid()
+
+    def build(self, input_shape):
+        self.input_spec = layers.InputSpec(shape=input_shape)
+
+    def call(self, inputs, *args, **kwargs):
+        x = self.global_pool(inputs)
+        x = self.reshape(x)
+        x = self.conv_in(x)
+        x = self.activation_relu(x)
+        x = self.conv_out(x)
+        x = self.activation_hard_sigmoid(x)
+        return layers.multiply([inputs, x])
+
+    def get_config(self):
+        config = {
+        }
+        base_config = super(SEBlock, self).get_config()
+        base_config.update(config)
+        return base_config
 
 
 class UpsampleBlock(layers.Layer):

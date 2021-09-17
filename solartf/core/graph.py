@@ -1,12 +1,11 @@
 import tensorflow as tf
 from tensorflow.keras.initializers import RandomNormal
-from tensorflow.keras.models import Model
 from tensorflow.keras import backend as K
 from tensorflow.keras import layers
 from tensorflow.keras.regularizers import l2
 from .activation import (hard_swish, relu)
-from .block import (DownsampleBlock, inverted_res_block, ResidualBlock, ResNetBlock, UpsampleBlock)
-from .layer import (GaussianBlur, InstanceNormalization, ReflectionPadding2D)
+from . import layer as solartf_layers
+from . import block as solartf_blocks
 from .util import get_filter_nb_by_depth
 
 
@@ -43,14 +42,14 @@ class Discriminator(tf.keras.Model):
         num_filters = self.init_filters
         for num_downsample_block in range(self.num_downsampling - 1):
             num_filters *= 2
-            self.downsample_blocks.append(DownsampleBlock(
+            self.downsample_blocks.append(solartf_blocks.DownsampleBlock(
                 filters=num_filters,
                 activation=self.activate_leaky_relu,
                 kernel_size=(4, 4),
                 strides=(2, 2),
             ))
 
-        self.downsample_blocks.append(DownsampleBlock(
+        self.downsample_blocks.append(solartf_blocks.DownsampleBlock(
             filters=num_filters,
             activation=self.activate_leaky_relu,
             kernel_size=(4, 4),
@@ -148,99 +147,161 @@ class FPN(tf.keras.Model):
         return super(FPN, self).get_config()
 
 
-class MobileNetV3(tf.keras.Model):
+class MobileNetV3Small(tf.keras.Model):
     def __init__(self,
-                 alpha=1.0,
-                 ref_filter_nb=32,
-                 model_type='small',
-                 minimalistic=False):
-        super(MobileNetV3, self).__init__()
-        self.minimalistic = minimalistic
+                 last_point_ch=1024,
+                 alpha=1.0,):
+        super(MobileNetV3Small, self).__init__()
         self.alpha = alpha
-        self.model_type = model_type
-        self.ref_filter_nb = ref_filter_nb
+        if self.alpha > 1.0:
+            self.last_point_ch = get_filter_nb_by_depth(last_point_ch * self.alpha)
+        else:
+            self.last_point_ch = last_point_ch
+
+        self.kernel_size = 3
+
+        channel_axis = 1 if K.image_data_format() == 'channels_first' else -1
+        self.conv_init = solartf_blocks.Conv2DBlock(
+            filters=16,
+            kernel_size=3,
+            strides=(2, 2),
+            padding='same',
+            use_bias=True,
+            normalize_axis=channel_axis,
+            normalize_epsilon=1e-3,
+            normalize_momentum=0.999,
+            activation='relu'
+        )
+        self.inverted_res_blocks = [
+            solartf_blocks.InvertedResBlock(
+                expansion=1,
+                infilters=16,
+                filters=get_filter_nb_by_depth(16, alpha=self.alpha),
+                kernel_size=3,
+                strides=2,
+                se_ratio=None,
+            ),
+            solartf_blocks.InvertedResBlock(
+                expansion=72. / 16.,
+                infilters=get_filter_nb_by_depth(16, alpha=self.alpha),
+                filters=get_filter_nb_by_depth(24, alpha=self.alpha),
+                kernel_size=3,
+                strides=2,
+                se_ratio=None,
+            ),
+            solartf_blocks.InvertedResBlock(
+                expansion=88. / 24.,
+                infilters=get_filter_nb_by_depth(24, alpha=self.alpha),
+                filters=get_filter_nb_by_depth(24, alpha=self.alpha),
+                kernel_size=3,
+                strides=1,
+                se_ratio=None,
+            ),
+            solartf_blocks.InvertedResBlock(
+                expansion=4.,
+                infilters=get_filter_nb_by_depth(24, alpha=self.alpha),
+                filters=get_filter_nb_by_depth(40, alpha=self.alpha),
+                kernel_size=self.kernel_size,
+                strides=2,
+                se_ratio=None,
+            ),
+            solartf_blocks.InvertedResBlock(
+                expansion=6.,
+                infilters=get_filter_nb_by_depth(40, alpha=self.alpha),
+                filters=get_filter_nb_by_depth(40, alpha=self.alpha),
+                kernel_size=self.kernel_size,
+                strides=1,
+                se_ratio=None,
+            ),
+            solartf_blocks.InvertedResBlock(
+                expansion=6.,
+                infilters=get_filter_nb_by_depth(40, alpha=self.alpha),
+                filters=get_filter_nb_by_depth(40, alpha=self.alpha),
+                kernel_size=self.kernel_size,
+                strides=1,
+                se_ratio=None,
+            ),
+            solartf_blocks.InvertedResBlock(
+                expansion=3.,
+                infilters=get_filter_nb_by_depth(40, alpha=self.alpha),
+                filters=get_filter_nb_by_depth(48, alpha=self.alpha),
+                kernel_size=self.kernel_size,
+                strides=1,
+                se_ratio=None,
+            ),
+            solartf_blocks.InvertedResBlock(
+                expansion=3.,
+                infilters=get_filter_nb_by_depth(48, alpha=self.alpha),
+                filters=get_filter_nb_by_depth(48, alpha=self.alpha),
+                kernel_size=self.kernel_size,
+                strides=1,
+                se_ratio=None,
+            ),
+            solartf_blocks.InvertedResBlock(
+                expansion=6.,
+                infilters=get_filter_nb_by_depth(48, alpha=self.alpha),
+                filters=get_filter_nb_by_depth(96, alpha=self.alpha),
+                kernel_size=self.kernel_size,
+                strides=2,
+                se_ratio=None,
+            ),
+            solartf_blocks.InvertedResBlock(
+                expansion=6.,
+                infilters=get_filter_nb_by_depth(96, alpha=self.alpha),
+                filters=get_filter_nb_by_depth(96, alpha=self.alpha),
+                kernel_size=self.kernel_size,
+                strides=1,
+                se_ratio=None,
+            ),
+            solartf_blocks.InvertedResBlock(
+                expansion=6.,
+                infilters=get_filter_nb_by_depth(96, alpha=self.alpha),
+                filters=get_filter_nb_by_depth(96, alpha=self.alpha),
+                kernel_size=self.kernel_size,
+                strides=1,
+                se_ratio=None,
+            )
+        ]
+        self.conv_middle = solartf_blocks.Conv2DBlock(
+            filters=get_filter_nb_by_depth(96, alpha=self.alpha),
+            kernel_size=1,
+            strides=1,
+            padding='same',
+            use_bias=True,
+            normalize_axis=channel_axis,
+            normalize_epsilon=1e-3,
+            normalize_momentum=0.999,
+            activation='relu'
+        )
+        self.conv_out = solartf_blocks.Conv2DBlock(
+            filters=self.last_point_ch,
+            kernel_size=1,
+            strides=1,
+            padding='same',
+            use_bias=True,
+            batch_normalization=None,
+            activation='relu'
+        )
 
     def call(self, inputs, training=None, mask=None):
-        channel_axis = 1 if K.image_data_format() == 'channels_first' else -1
-        if self.minimalistic:
-            kernel = 3
-            activation = relu
-            se_ratio = None
-        else:
-            kernel = 5
-            activation = hard_swish
-            se_ratio = 0.25
+        x = self.conv_init(inputs)
 
-        x = GaussianBlur(kernel_size=3, mu=0., sigma=1.5)(inputs)
+        for inverted_res_block in self.inverted_res_blocks:
+            x = inverted_res_block(x)
 
-        x = layers.Conv2D(4 * self.ref_filter_nb // 10,
-                          kernel_size=3,
-                          strides=(2, 2),
-                          padding='same',
-                          use_bias=True,
-                          name=f'mobilenetv3_{self.model_type}_conv_0')(x)
-        x = layers.BatchNormalization(axis=channel_axis,
-                                      epsilon=1e-3,
-                                      momentum=0.999,
-                                      name=f'mobilenetv3_{self.model_type}_conv/bn_0')(x)
-        x = activation(x, name=f'mobilenetv3_{self.model_type}_activation_0')
+        x = self.conv_middle(x)
+        x = self.conv_out(x)
 
-        if self.model_type == 'small':
-            x = self.mobilenet_v3_small_stack_fn(x, kernel, activation, se_ratio)
-            last_point_ch = 1024
-        else:
-            raise NotImplementedError(f'{self.model_type} is not implemented yet...')
-
-        last_conv_ch = get_filter_nb_by_depth(K.int_shape(x)[channel_axis] * 6)
-        if self.alpha > 1.0:
-            last_point_ch = get_filter_nb_by_depth(last_point_ch * self.alpha)
-
-        x = layers.Conv2D(last_conv_ch,
-                          kernel_size=1,
-                          padding='same',
-                          use_bias=True,
-                          name=f'mobilenetv3_{self.model_type}_conv_1')(x)
-        x = layers.BatchNormalization(axis=channel_axis,
-                                      epsilon=1e-3,
-                                      momentum=0.999,
-                                      name=f'mobilenetv3_{self.model_type}_conv/bn_1')(x)
-        x = activation(x, name=f'mobilenetv3_{self.model_type}_activation_1')
-        x = layers.Conv2D(last_point_ch,
-                          kernel_size=1,
-                          padding='same',
-                          use_bias=True,
-                          name=f'mobilenetv3_{self.model_type}_conv_2')(x)
-        x = activation(x, name=f'mobilenetv3_{self.model_type}_activation_2')
-
-        return Model(inputs, x)
-
-    def mobilenet_v3_small_stack_fn(self, x, kernel, activation, se_ratio):
-        x = inverted_res_block(x, 1, get_filter_nb_by_depth(self.ref_filter_nb, alpha=self.alpha),
-                               3, 2, se_ratio, relu, 0)
-        x = inverted_res_block(x, 72. / 16, get_filter_nb_by_depth(self.ref_filter_nb, alpha=self.alpha),
-                               3, 2, None, relu, 1)
-        x = inverted_res_block(x, 88. / 24, get_filter_nb_by_depth(self.ref_filter_nb, alpha=self.alpha),
-                               3, 1, None, relu, 2)
-        x = inverted_res_block(x, 4, get_filter_nb_by_depth(self.ref_filter_nb, alpha=self.alpha),
-                               kernel, 2, se_ratio, activation, 3)
-        x = inverted_res_block(x, 6, get_filter_nb_by_depth(self.ref_filter_nb, alpha=self.alpha),
-                               kernel, 1, se_ratio, activation, 4)
-        x = inverted_res_block(x, 6, get_filter_nb_by_depth(self.ref_filter_nb, alpha=self.alpha),
-                               kernel, 1, se_ratio, activation, 5)
-        x = inverted_res_block(x, 3, get_filter_nb_by_depth(self.ref_filter_nb, alpha=self.alpha),
-                               kernel, 1, se_ratio, activation, 6)
-        x = inverted_res_block(x, 3, get_filter_nb_by_depth(self.ref_filter_nb, alpha=self.alpha),
-                                kernel, 1, se_ratio, activation, 7)
-        x = inverted_res_block(x, 6, get_filter_nb_by_depth(self.ref_filter_nb, alpha=self.alpha),
-                               kernel, 2, se_ratio, activation, 8)
-        x = inverted_res_block(x, 6, get_filter_nb_by_depth(self.ref_filter_nb, alpha=self.alpha),
-                               kernel, 1, se_ratio, activation, 9)
-        x = inverted_res_block(x, 6, get_filter_nb_by_depth(self.ref_filter_nb, alpha=self.alpha),
-                               kernel, 1, se_ratio, activation, 10)
         return x
 
     def get_config(self):
-        return super(MobileNetV3, self).get_config()
+        config = {
+            'last_point_ch': self.last_point_ch,
+            'alpha': self.alpha,
+        }
+        base_config = super(MobileNetV3Small, self).get_config()
+        base_config.update(config)
+        return base_config
 
 
 class ResNetV2(tf.keras.Model):
@@ -277,11 +338,11 @@ class ResNetV2(tf.keras.Model):
                 else:
                     num_filters_out = num_filters_in * 2
 
-                self.resnet_blocks.append(ResNetBlock(num_filters_in=num_filters_in,
-                                                      num_filters_out=num_filters_out,
-                                                      stage_index=stage_index,
-                                                      block_index=block_index,
-                                                      ))
+                self.resnet_blocks.append(solartf_blocks.ResNetBlock(
+                    num_filters_in=num_filters_in,
+                    num_filters_out=num_filters_out,
+                    stage_index=stage_index,
+                    block_index=block_index,))
             num_filters_in = num_filters_out
 
     def call(self, inputs, training=None, mask=None):
@@ -327,10 +388,10 @@ class ResnetGenerator(tf.keras.Model):
         self.num_upsample_blocks = num_upsample_blocks
         self.prefix = 'resnet_gen' if prefix is None else prefix
 
-        self.reflection_padding = ReflectionPadding2D(padding=(3, 3))
+        self.reflection_padding = solartf_layers.ReflectionPadding2D(padding=(3, 3))
         self.init_conv = layers.Conv2D(self.init_filters, (7, 7), kernel_initializer=self.kernel_initializer, use_bias=False)
         self.final_conv = layers.Conv2D(3, (7, 7), padding="valid")
-        self.inst_norm = InstanceNormalization(gamma_initializer=self.gamma_initializer)
+        self.inst_norm = solartf_layers.InstanceNormalization(gamma_initializer=self.gamma_initializer)
         self.active_relu = layers.Activation("relu")
         self.active_tanh = layers.Activation("tanh")
 
@@ -338,17 +399,20 @@ class ResnetGenerator(tf.keras.Model):
         self.downsample_blocks = []
         for _ in range(self.num_downsampling_blocks):
             filters *= 2
-            self.downsample_blocks.append(DownsampleBlock(filters=filters,
-                                                          activation=self.active_relu))
+            self.downsample_blocks.append(solartf_blocks.DownsampleBlock(
+                filters=filters,
+                activation=self.active_relu))
 
-        self.residual_block = ResidualBlock(filters=filters,
-                                            activation=self.active_relu)
+        self.residual_block = solartf_blocks.ResidualBlock(
+            filters=filters,
+            activation=self.active_relu)
 
         self.upsample_blocks = []
         for _ in range(self.num_upsample_blocks):
             filters //= 2
-            self.upsample_blocks.append(UpsampleBlock(filters=filters,
-                                                      activation=self.active_relu))
+            self.upsample_blocks.append(solartf_blocks.UpsampleBlock(
+                filters=filters,
+                activation=self.active_relu))
 
     def call(self, inputs):
         x = self.reflection_padding(inputs)

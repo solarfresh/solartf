@@ -65,6 +65,9 @@ class ResNetV2Config:
         ),
         dropout_rate=.3
     )
+    CUSTOM_OBJECTS = {
+        'ResNetV2': graph.ResNetV2
+    }
     MODEL_WEIGHT_PATH = None
     MODEL_CUSTOM_OBJECTS = None
 
