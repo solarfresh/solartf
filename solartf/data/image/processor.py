@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 from typing import (List, Tuple)
+from solartf.data.polygon.type import Polygon
 
 
 class ImageProcessor:
@@ -159,6 +160,31 @@ class ImageProcessor:
                 orientation = 'vertical'
 
         return orientation
+
+    def perspective(self, angle_scale=0., irregularity=0., spikeyness=0.,):
+        angle_scale = angle_scale if angle_scale is not None else 0.
+        irregularity = irregularity if irregularity is not None else 0.
+        spikeyness = spikeyness if spikeyness is not None else 0.
+
+        avg_r = min(self.image_shape[:2]) / 6
+        polygon1 = Polygon(x=self.image_shape[1],
+                           y=self.image_shape[0], avg_r=avg_r,
+                           angle_scale=angle_scale,
+                           irregularity=irregularity,
+                           spikeyness=spikeyness,
+                           num_verts=4)
+        polygon2 = Polygon(x=self.image_shape[1],
+                           y=self.image_shape[0], avg_r=avg_r,
+                           angle_scale=angle_scale,
+                           irregularity=irregularity,
+                           spikeyness=spikeyness,
+                           num_verts=4)
+
+        pts1 = polygon1.points
+        pts2 = polygon2.points
+        M = cv2.getPerspectiveTransform(pts1.astype(np.float32), pts2.astype(np.float32))
+        self.image_array = cv2.warpPerspective(self.image_array, M, (self.image_shape[1], self.image_shape[0]))
+        return M
 
     def resize(self, size, keep_aspect_ratio=False):
         image_array = self.image_array.copy()
@@ -337,13 +363,19 @@ class ImageAugmentation:
                  scale_ratio=None,
                  degree=None,
                  h_shift=None,
-                 v_shift=None):
+                 v_shift=None,
+                 angle_scale=None,
+                 irregularity=None,
+                 spikeyness=None):
         self.brightness_ratio = brightness_ratio
         self.flip_orientation = flip_orientation
         self.scale_ratio = scale_ratio
         self.degree = degree
         self.h_shift = h_shift
         self.v_shift = v_shift
+        self.angle_scale = angle_scale
+        self.irregularity = irregularity
+        self.spikeyness = spikeyness
 
     def execute(self, image_input_list: List[ImageInput]):
         for image_input in image_input_list:
@@ -364,6 +396,11 @@ class ImageAugmentation:
 
             if self.h_shift is not None or self.v_shift is not None:
                 image_input.translate(horizontal=self.h_shift, vertical=self.v_shift)
+
+            if self.angle_scale is not None or self.irregularity is not None or self.spikeyness is not None:
+                image_input.perspective(angle_scale=self.angle_scale,
+                                        irregularity=self.irregularity,
+                                        spikeyness=self.spikeyness)
 
             if len(image_input.image_array.shape) < 3:
                 image_input.image_array = image_input.image_array[..., np.newaxis]
