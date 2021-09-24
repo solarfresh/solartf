@@ -10,22 +10,25 @@ class Config:
     IMAGE_SHAPE = (640, 640, 3)
 
     BRIGHTNESS_RATIO = (.5, 2.)
-    FLIP_ORIENTATION = 'horizontal_random'
-    SCALE_RATIO = (.8, 1.2)
-    DEGREE = (-5., 5.)
-    H_SHIFT = (-10, 10)
-    V_SHIFT = (-10, 10)
+    FLIP_ORIENTATION = None
+    SCALE_RATIO = None
+    DEGREE = (-1., 1.)
+    H_SHIFT = (-1, 1)
+    V_SHIFT = (-1, 1)
+    ANGLE_SCALE = 0.1
+    IRREGULARITY = 0.01
+    SPIKEYNESS = 0.01
 
     AUGMENT = [
-        RandomOcclusion(radius=(40, 60),
-                        width=(40, 60),
-                        height=(40, 60)),
         KeypointAugmentation(brightness_ratio=BRIGHTNESS_RATIO,
                              flip_orientation=FLIP_ORIENTATION,
                              scale_ratio=SCALE_RATIO,
                              degree=DEGREE,
                              h_shift=H_SHIFT,
-                             v_shift=V_SHIFT)
+                             v_shift=V_SHIFT,
+                             angle_scale=ANGLE_SCALE,
+                             irregularity=IRREGULARITY,
+                             spikeyness=SPIKEYNESS)
     ]
 
 
