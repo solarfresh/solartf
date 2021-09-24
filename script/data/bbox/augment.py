@@ -16,6 +16,9 @@ class Config:
     DEGREE = (-5., 5.)
     H_SHIFT = (-10, 10)
     V_SHIFT = (-10, 10)
+    ANGLE_SCALE = 0.1
+    IRREGULARITY = 0.01
+    SPIKEYNESS = 0.01
 
     AUGMENT = [
         MosaicImageAugmentation(n_slice=2),
@@ -24,7 +27,10 @@ class Config:
                            scale_ratio=SCALE_RATIO,
                            degree=DEGREE,
                            h_shift=H_SHIFT,
-                           v_shift=V_SHIFT)
+                           v_shift=V_SHIFT,
+                           angle_scale=ANGLE_SCALE,
+                           irregularity=IRREGULARITY,
+                           spikeyness=SPIKEYNESS)
     ]
 
 
