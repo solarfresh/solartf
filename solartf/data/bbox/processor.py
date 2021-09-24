@@ -70,6 +70,22 @@ class BBoxProcessor:
 
         return self
 
+    def perspective(self, transfer_matrix):
+        bboxes_tensor = self._bboxes_tensor.copy()
+        if bboxes_tensor.size < 1:
+            return self
+
+        left_top = bboxes_tensor[..., [0, 1]]
+        right_bottom = bboxes_tensor[..., [2, 3]]
+        pts = np.concatenate([left_top, right_bottom], axis=0)
+        pts = np.expand_dims(pts.astype(np.float32), 0)
+        pts = cv2.perspectiveTransform(pts, transfer_matrix).astype(np.int32)
+        left_top, right_bottom = np.split(np.squeeze(pts), 2, axis=0)
+
+        bboxes_tensor = np.concatenate([left_top[:, [0, 1]], right_bottom[:, [0, 1]]], axis=1)
+        self._bboxes_tensor = bboxes_tensor
+        return self
+
     def resize(self, scale: Tuple):
         bboxes_tensor = self._bboxes_tensor.copy()
         if bboxes_tensor.size < 1:

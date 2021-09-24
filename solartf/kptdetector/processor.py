@@ -67,13 +67,19 @@ class KeypointAugmentation:
                  scale_ratio=None,
                  degree=None,
                  h_shift=None,
-                 v_shift=None):
+                 v_shift=None,
+                 angle_scale=None,
+                 irregularity=None,
+                 spikeyness=None):
         self.brightness_ratio = brightness_ratio
         self.flip_orientation = flip_orientation
         self.scale_ratio = scale_ratio
         self.degree = degree
         self.h_shift = h_shift
         self.v_shift = v_shift
+        self.angle_scale = angle_scale
+        self.irregularity = irregularity
+        self.spikeyness = spikeyness
 
     def execute(self,
                 image_input_list: List[ImageInput],
@@ -101,3 +107,10 @@ class KeypointAugmentation:
             if self.h_shift is not None or self.v_shift is not None:
                 transfer_matrix = image_input.translate(horizontal=self.h_shift, vertical=self.v_shift)
                 kpt_input.affine(transfer_matrix=transfer_matrix)
+
+            if self.angle_scale is not None or self.irregularity is not None or self.spikeyness is not None:
+                transfer_matrix = image_input.perspective(
+                    angle_scale=self.angle_scale,
+                    irregularity=self.irregularity,
+                    spikeyness=self.spikeyness)
+                kpt_input.perspective(transfer_matrix=transfer_matrix)

@@ -54,6 +54,14 @@ class KeypointProcessor:
 
         return self
 
+    def perspective(self, transfer_matrix):
+        points_tensor = self.points_tensor.copy()
+        pts = points_tensor[..., [0, 1]].astype(np.float32)
+        pts = np.expand_dims(pts, 0)
+        points_tensor = cv2.perspectiveTransform(pts, transfer_matrix).astype(np.int32)
+        self.points_tensor = np.squeeze(points_tensor)
+        return self
+
     def resize(self, scale: Tuple):
         points_tensor = self.points_tensor.copy()
 
