@@ -45,6 +45,8 @@ class TFKeypointNet(TFModelBase):
         img_height, img_width, _ = self.input_shape
         image_input = layers.Input(shape=self.input_shape, name='image_input')
         x = self.backbone(image_input)
+        if isinstance(x, list):
+            x = x[-1]
         x = layers.Dropout(self.dropout_rate)(x)
         x = layers.GlobalAveragePooling2D()(x)
         cls = layers.Dense(units=self.n_classes, activation='sigmoid', name='cls_output')(x)
