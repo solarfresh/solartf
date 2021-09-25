@@ -4,9 +4,8 @@ from tensorflow.keras.losses import (categorical_crossentropy, mse)
 from tensorflow.keras.layers import Input
 from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
-from solartf.core.activation import hard_swish
-from solartf.core.block import inverted_res_block
-from solartf.core.graph import (MobileNetV3, FPN)
+from solartf.core import graph
+from solartf.core.block import InvertedResBlock
 from solartf.core.model import TFModelBase
 from solartf.data.bbox.type import BBoxesTensor
 from .bbox import (BBoxLabeler, BBoxOutput, GridAnchor)
@@ -173,36 +172,69 @@ class AnchorBaseDetectTFModel(TFModelBase):
                             method='numpy')
 
 
-class MobileNetV3TFModel(AnchorBaseDetectTFModel):
+class MobileNetV3SmallTFModel(AnchorBaseDetectTFModel):
     def __init__(self,
                  fpn_n_filter=40,
-                 model_type='small',
                  *args, **kwargs):
-        self.model_type = model_type
-        self.fpn = FPN(n_filters=fpn_n_filter)
-        super(MobileNetV3TFModel, self).__init__(*args, **kwargs)
+        super(MobileNetV3SmallTFModel, self).__init__(*args, **kwargs)
+
+        self.backbone = graph.MobileNetV3Small(
+            last_point_ch=1024,
+            alpha=1.0
+        )
+        self.fpn = graph.FeaturePyramidNetwork(
+            n_features=5,
+            n_filters=fpn_n_filter,
+        )
+
+        self.inverted_res_blocks = []
+        for idx in range(3):
+            self.inverted_res_blocks.append([
+                InvertedResBlock(
+                    expansion=6,
+                    infilters=fpn_n_filter,
+                    filters=fpn_n_filter,
+                    kernel_size=3,
+                    strides=1,
+                    se_ratio=.25,
+                ),
+                InvertedResBlock(
+                    expansion=6,
+                    infilters=fpn_n_filter,
+                    filters=fpn_n_filter,
+                    kernel_size=3,
+                    strides=2,
+                    se_ratio=.25,
+                )
+            ])
+            self.detect_conv_blocks = [
+                InvertedResBlock(
+                    expansion=6,
+                    infilters=fpn_n_filter,
+                    filters=fpn_n_filter,
+                    kernel_size=3,
+                    strides=1,
+                    se_ratio=.25,
+                ),
+                InvertedResBlock(
+                    expansion=6,
+                    infilters=fpn_n_filter,
+                    filters=fpn_n_filter,
+                    kernel_size=3,
+                    strides=1,
+                    se_ratio=.25,
+                )
+            ]
 
     def build_model(self):
         image_input = Input(shape=self.input_shape, name='detect_image_input')
-        backbone = MobileNetV3(alpha=1.0,
-                               model_type=self.model_type,
-                               minimalistic=True).call(image_input)
-
-        backbone_output_names = ['re_lu_20', 're_lu_15', 're_lu_5', 're_lu_1',
-                                 'mobilenetv3_small_activation_0']
-
-        backbone_outputs = [
-            backbone.get_layer(layer_name).output
-            for layer_name in backbone_output_names
-        ]
-
-        detect_neck = self.fpn.call(backbone_outputs)
-
+        backbone_outputs = self.backbone(image_input)
+        detect_neck = self.fpn(backbone_outputs[:-1])
         detect_neck.reverse()
         x = detect_neck[-1]
-        for idx in range(4):
-            x = inverted_res_block(x, 6, 32, 3, 1, .25, hard_swish, name=f'{idx}/neck/conv0')
-            x = inverted_res_block(x, 6, 32, 3, 2, .25, hard_swish, name=f'{idx}/neck/conv1')
+        for inverted_res_block_group in self.inverted_res_blocks:
+            for inverted_res_block in inverted_res_block_group:
+                x = inverted_res_block(x)
             detect_neck.append(x)
 
         predictions = self.detect_head.call(detect_neck[-self.n_predictor_layers:])
@@ -210,6 +242,7 @@ class MobileNetV3TFModel(AnchorBaseDetectTFModel):
         self.model = Model(image_input, predictions)
         return self
 
-    def detect_conv_block(self, inputs, name=None):
-        x = inverted_res_block(inputs, 6, 32, 3, 1, .25, hard_swish, name=f'{name}/conv_0')
-        return inverted_res_block(x, 6, 32, 3, 1, .25, hard_swish, name=f'{name}/conv_1')
+    def detect_conv_block(self, x):
+        for conv in self.detect_conv_blocks:
+            x = conv(x)
+        return x

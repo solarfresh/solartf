@@ -104,14 +104,16 @@ class LeNet5(tf.keras.Model):
         return super(LeNet5, self).get_config()
 
 
-class FPN(tf.keras.Model):
+class FeaturePyramidNetwork(tf.keras.Model):
     def __init__(self,
+                 n_features,
                  n_filters=40,
                  prefix=None,
                  kernel_initializer='he_normal',
                  l2_regularization=0.0005,
                  use_bias=True):
-        super(FPN, self).__init__()
+        super(FeaturePyramidNetwork, self).__init__()
+        self.n_features = n_features
         self.n_filters = n_filters
         self.kernel_initializer = kernel_initializer
         self.l2_reg = l2_regularization
@@ -119,32 +121,54 @@ class FPN(tf.keras.Model):
         if prefix is None:
             self.prefix = 'fpn'
 
+        self.conv_1_list = [
+            layers.Conv2D(
+                self.n_filters,
+                kernel_size=1,
+                kernel_regularizer=l2(self.l2_reg)
+            )
+            for _ in range(self.n_features)
+        ]
+
+        self.conv_3_list = [
+            layers.Conv2D(
+                self.n_filters,
+                kernel_size=3,
+                kernel_regularizer=l2(self.l2_reg)
+            )
+            for _ in range(self.n_features)
+        ]
+        self.upsampling_list = [
+            layers.UpSampling2D(2)
+            for _ in range(self.n_features)
+        ]
+
     def call(self, inputs, training=None, mask=None):
         n_features = len(inputs)
         feature_map_list = []
         for index in range(n_features):
             if index == 0:
-                p = layers.Conv2D(self.n_filters, (1, 1),
-                                  kernel_regularizer=l2(self.l2_reg),
-                                  name=f'{self.prefix}_c{index}_p{index}')(inputs[index])
+                p = self.conv_1_list[index](inputs[n_features - index - 1])
             else:
-                p = layers.Add(name=f'{self.prefix}_p{index}_add')([
-                    layers.UpSampling2D(2)(p),
-                    layers.Conv2D(self.n_filters, (1, 1),
-                                  padding='same',
-                                  kernel_regularizer=l2(self.l2_reg),
-                                  name=f'{self.prefix}_c{index}_p{index}')(inputs[index])
+                p = layers.add([
+                    self.upsampling_list[index](p),
+                    self.conv_1_list[index](inputs[n_features - index - 1])
                 ])
 
-            feature_map_list.append(layers.Conv2D(self.n_filters, (3, 3),
-                                                  padding="SAME",
-                                                  kernel_regularizer=l2(self.l2_reg),
-                                                  name=f'{self.prefix}_p_conv_{index}')(p))
+            feature_map_list.append(self.conv_3_list[index](p))
 
         return feature_map_list
 
     def get_config(self):
-        return super(FPN, self).get_config()
+        config = {
+            'n_features': self.n_features,
+            'n_filters': self.n_filters,
+            'kernel_initializer': self.kernel_initializer,
+            'l2_reg': self.l2_reg
+        }
+        base_config = super(FeaturePyramidNetwork, self).get_config()
+        base_config.update(config)
+        return base_config
 
 
 class MobileNetV3Small(tf.keras.Model):
@@ -286,13 +310,17 @@ class MobileNetV3Small(tf.keras.Model):
     def call(self, inputs, training=None, mask=None):
         x = self.conv_init(inputs)
 
+        outputs = []
         for inverted_res_block in self.inverted_res_blocks:
             x = inverted_res_block(x)
+            if inverted_res_block.strides > 1:
+                outputs.append(x)
 
         x = self.conv_middle(x)
         x = self.conv_out(x)
+        outputs.append(x)
 
-        return x
+        return outputs
 
     def get_config(self):
         config = {

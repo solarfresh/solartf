@@ -6,13 +6,13 @@ from solartf.core.loss import (SSDMultipleLoss, smooth_L1_loss, IoUFamilyLoss)
 from solartf.objdetector.layer import DecodeDetections
 from solartf.objdetector.pipeline import AnchorDetectPipeline
 from solartf.objdetector.config import AnchorDetectConfig
-from solartf.objdetector.model import MobileNetV3TFModel
+from solartf.objdetector.model import MobileNetV3SmallTFModel
 
 
 class Config(AnchorDetectConfig):
 
     # train or freeze or show or partial_freeze or inference
-    STATUS = 'train'
+    STATUS = 'show'
     # MODEL_WEIGHT_PATH = '/Users/huangshangyu/Downloads/model/' \
     #                     'epoch-00790_mbox_conf_compute_classification_metric-0.9944_val_mbox_conf_compute_classification_metric-0.9944_mbox_loc_compute_localization_loss-0.7338_val_mbox_loc_compute_localization_loss-0.7263.h5'
     MODEL_WEIGHT_PATH = None
@@ -72,19 +72,20 @@ class Config(AnchorDetectConfig):
     BBOX_LABEL_METHOD = 'threshold'
 
     CLASS_NUMBER = 2
-    MODEL = MobileNetV3TFModel(input_shape=IMAGE_SHAPE,
-                               n_classes=CLASS_NUMBER,
-                               aspect_ratios=ANCHOR_ASPECT_RATIOS,
-                               feature_map_shapes=FEATURE_MAP_SHAPES,
-                               scales=ANCHOR_SCALES,
-                               step_shapes=ANCHOR_STEP_SHAPES,
-                               offset_shapes=ANCHOR_OFFSET_SHAPES,
-                               variances=OUTPUT_ENCODER_VARIANCES,
-                               bbox_encoding=OUTPUT_ENCODER_LOC_TYPE,
-                               bbox_normalize=OUTPUT_ENCODER_NORMALIZE,
-                               pos_iou_threshold=POSITIVE_IOU_THRESHOLD,
-                               neg_iou_threshold=NEGATIVE_IOU_THRESHOLD,
-                               bbox_labeler_method=BBOX_LABEL_METHOD)
+    MODEL = MobileNetV3SmallTFModel(
+        input_shape=IMAGE_SHAPE,
+        n_classes=CLASS_NUMBER,
+        aspect_ratios=ANCHOR_ASPECT_RATIOS,
+        feature_map_shapes=FEATURE_MAP_SHAPES,
+        scales=ANCHOR_SCALES,
+        step_shapes=ANCHOR_STEP_SHAPES,
+        offset_shapes=ANCHOR_OFFSET_SHAPES,
+        variances=OUTPUT_ENCODER_VARIANCES,
+        bbox_encoding=OUTPUT_ENCODER_LOC_TYPE,
+        bbox_normalize=OUTPUT_ENCODER_NORMALIZE,
+        pos_iou_threshold=POSITIVE_IOU_THRESHOLD,
+        neg_iou_threshold=NEGATIVE_IOU_THRESHOLD,
+        bbox_labeler_method=BBOX_LABEL_METHOD)
 
     TRAIN_MODEL_CHECKPOINT_PATH = '/Users/huangshangyu/Downloads/model/ssd_xentropy_diou_epoch-{epoch:05d}' \
                                   + ''.join([f'_{key}-{{{key}:.4f}}_val_{key}-{{val_{key}:.4f}}'
