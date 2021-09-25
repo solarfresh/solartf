@@ -4,7 +4,7 @@ from tensorflow.keras import layers
 from tensorflow.keras.regularizers import l2
 from . import activation as solar_activation
 from . import layer as solartf_layers
-from .util import (correct_pad, get_filter_nb_by_depth)
+from .util import (get_filter_nb_by_depth,)
 
 
 class Conv2DBlock(layers.Layer):
@@ -277,8 +277,9 @@ class InvertedResBlock(layers.Layer):
         shortcut = x
 
         x = self.conv_expand(x)
-        if self.strides == 2:
-            x = self.zero_padding(x)
+        # todo: it would make FPN wrong, and will be fixed in the future
+        # if self.strides == 2:
+        #     x = self.zero_padding(x)
 
         x = self.depthwise_conv(x)
         if self.se_ratio:
