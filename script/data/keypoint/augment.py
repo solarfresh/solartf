@@ -4,8 +4,8 @@ from solartf.kptdetector.generator import KeypointDirectoryGenerator
 
 
 class Config:
-    IMAGE_DIR = '/Users/huangshangyu/Downloads/experiment/facekpt/image'
-    LABEL_DIR = '/Users/huangshangyu/Downloads/experiment/facekpt/annotation'
+    IMAGE_DIR = '/Users/huangshangyu/Downloads/experiment/facekpt/test/images'
+    LABEL_DIR = '/Users/huangshangyu/Downloads/experiment/facekpt/test/annotations'
     IMAGE_TYPE = 'bgr'
     IMAGE_SHAPE = (640, 640, 3)
 
@@ -15,7 +15,7 @@ class Config:
     DEGREE = (-1., 1.)
     H_SHIFT = (-1, 1)
     V_SHIFT = (-1, 1)
-    ANGLE_SCALE = 0.1
+    ANGLE_SCALE = 0.
     IRREGULARITY = 0.01
     SPIKEYNESS = 0.01
 
@@ -34,12 +34,14 @@ class Config:
 
 if __name__ == '__main__':
     config = Config()
-    for image_input_list, kpt_input_list in KeypointDirectoryGenerator(image_dir=config.IMAGE_DIR,
-                                                                       label_dir=config.LABEL_DIR,
-                                                                       image_shape=config.IMAGE_SHAPE,
-                                                                       image_type=config.IMAGE_TYPE,
-                                                                       dataset_type='test',
-                                                                       augment=config.AUGMENT):
+    for input_list in KeypointDirectoryGenerator(
+            image_dir=config.IMAGE_DIR,
+            label_dir=config.LABEL_DIR,
+            image_shape=config.IMAGE_SHAPE,
+            image_type=config.IMAGE_TYPE,
+            dataset_type='test',
+            augment=config.AUGMENT):
+        image_input_list, kpt_input_list, classes_input_list = input_list
 
         for image_input, kpt_input in zip(image_input_list, kpt_input_list):
             image_array = image_input.image_array.copy()

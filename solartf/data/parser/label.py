@@ -30,18 +30,15 @@ class LabelReader:
         else:
             self.bboxes = []
 
+        if 'classification' in self.annotation['annotations']:
+            self.classes = self._get_classes()
+        else:
+            self.classes = []
+
         if 'keypoints' in self.annotation['annotations']:
             self.keypoints = self._get_keypoints()
         else:
             self.keypoints = []
-
-    def _get_keypoints(self):
-        keypoints = self.annotation['annotations']['keypoints']
-        return [Keypoint(class_id=kpt['class_id'],
-                         x=kpt['x'],
-                         y=kpt['y'],
-                         visible=kpt['visible'] if 'visible' in kpt else 1,
-                         class_map=self.class_map) for kpt in keypoints]
 
     def _get_bboxes(self):
         bboxes = self.annotation['annotations']['bboxes']
@@ -58,3 +55,15 @@ class LabelReader:
             boxes.append(bbox_obj)
 
         return boxes
+
+    def _get_classes(self):
+        classes = self.annotation['annotations']['classification']
+        return [cls['class_id'] for cls in classes]
+
+    def _get_keypoints(self):
+        keypoints = self.annotation['annotations']['keypoints']
+        return [Keypoint(class_id=kpt['class_id'],
+                         x=kpt['x'],
+                         y=kpt['y'],
+                         visible=kpt['visible'] if 'visible' in kpt else 1,
+                         class_map=self.class_map) for kpt in keypoints]

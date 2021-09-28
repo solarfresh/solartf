@@ -5,6 +5,7 @@ from solartf.data.keypoint.processor import KeypointInput
 
 
 class KeypointDetectInput:
-    def __init__(self, image: Image, keypoints: List[Keypoint]):
+    def __init__(self, image: Image, keypoints: List[Keypoint], cls_prop: List):
         self.image = image
         self.keypoint_input = KeypointInput(keypoints=keypoints)
+        self.classes = cls_prop
