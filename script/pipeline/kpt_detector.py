@@ -3,6 +3,7 @@ import os
 import pandas as pd
 import tensorflow as tf
 from tensorflow.keras import (losses, optimizers)
+from tensorflow.keras.applications import MobileNetV2
 from tensorflow.keras.callbacks import ModelCheckpoint
 from tensorflow.keras.layers import Concatenate
 from solartf.kptdetector.pipeline import KeypointDetectPipeline
@@ -16,7 +17,7 @@ from solartf.core.loss import smooth_L1_loss
 class Config(ResNetV2Config):
 
     # train or freeze or show or partial_freeze or inference
-    STATUS = 'show'
+    STATUS = 'train'
     # MODEL_WEIGHT_PATH = '/Users/huangshangyu/Downloads/model/kptdetector/' \
     #                     'kptdetector-00500_loss-0.0807_val_loss-0.0901_cls_output_loss-0.0000_val_cls_output_loss-0.0000_kpt_output_loss-0.0057_val_kpt_output_loss-0.0151.h5'
     MODEL_WEIGHT_PATH = None
@@ -39,9 +40,10 @@ class Config(ResNetV2Config):
     TEST_IMAGE_PATH = os.path.join(DATA_ROOT, 'test', 'images')
     TEST_LABEL_PATH = os.path.join(DATA_ROOT, 'test', 'annotations')
 
-    TRAIN_LOSS = {'cls': losses.binary_crossentropy,
+    TRAIN_LOSS = {'cls_0': losses.binary_crossentropy,
+                  'cls_1': losses.binary_crossentropy,
                   'kpt': smooth_L1_loss}
-    TRAIN_LOSS_WEIGHTS = [1., 1.]
+    TRAIN_LOSS_WEIGHTS = [1., 1., 1.]
 
     TRAIN_BATCH_SIZE = 32
     TRAIN_STEP_PER_EPOCH = 50
@@ -62,13 +64,15 @@ class Config(ResNetV2Config):
                                           v_shift=(-10, 10))]
 
     IMAGE_SHAPE = (64, 64, 3)
-    CLASS_NUMBER = 4
+    CLASS_NUMBER = [2, 5]
+    CLASS_ACTIVATION = ['softmax', 'sigmoid']
     MODEL = TFKeypointNet(
         input_shape=IMAGE_SHAPE,
         n_classes=CLASS_NUMBER,
-        backbone=graph.MobileNetV3Small(
-            last_point_ch=128,
-            alpha=1.0
+        cls_activations=CLASS_ACTIVATION,
+        backbone=MobileNetV2(
+            alpha=1.0,
+            include_top=False
         ),
         dropout_rate=.3
     )
@@ -79,7 +83,7 @@ class Config(ResNetV2Config):
     TRAIN_OPTIMIZER = optimizers.Adam(learning_rate=1e-3, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=5e-04)
     TRAIN_MODEL_CHECKPOINT_PATH = '/Users/huangshangyu/Downloads/model/kptdetector/kptdetector-{epoch:05d}' \
                                   + ''.join([f'_{key}-{{{key}:.4f}}_val_{key}-{{val_{key}:.4f}}'
-                                             for key in ['loss', 'cls_output_loss', 'kpt_output_loss']]) + '.h5'
+                                             for key in ['loss', 'cls_0_output_loss', 'cls_1_output_loss', 'kpt_output_loss']])
     TRAIN_CALLBACKS = [
         ModelCheckpoint(filepath=TRAIN_MODEL_CHECKPOINT_PATH,
                         monitor='val_loss',

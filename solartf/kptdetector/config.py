@@ -7,7 +7,8 @@ from .model import TFKeypointNet
 class ResNetV2Config:
     IMAGE_SHAPE = (64, 64, 3)
     IMAGE_TYPE = 'bgr'
-    CLASS_NUMBER = 4
+    CLASS_NUMBER = [4]
+    CLASS_ACTIVATION = ['sigmoid']
 
     TRAIN_IMAGE_PATH = ''
     TRAIN_AUGMENT = None
@@ -58,6 +59,7 @@ class ResNetV2Config:
     MODEL = TFKeypointNet(
         input_shape=IMAGE_SHAPE,
         n_classes=CLASS_NUMBER,
+        cls_activations=CLASS_ACTIVATION,
         backbone=graph.ResNetV2(
             num_res_blocks=3,
             num_stage=3,
