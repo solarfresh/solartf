@@ -25,8 +25,9 @@ class KeypointLabelIterator(DirectoryIterator):
             label_reader = LabelReader(file_path)
             image_prop = label_reader.image_prop
             kpts_prop = label_reader.keypoints
+            cls_prop = label_reader.classes
             image_prop.source_ref = os.path.join(self.image_dir, image_prop.source_ref)
 
-            return KeypointDetectInput(image_prop, kpts_prop)
+            return KeypointDetectInput(image_prop, kpts_prop, cls_prop)
 
         raise StopIteration

@@ -56,9 +56,11 @@ class KeypointDirectoryGenerator(KerasGeneratorBase):
     def _data_generation(self, indexes):
         image_input_list = []
         kpt_input_list = []
+        classes_input_list = []
         for index in indexes:
             gt_input = self.gt_input_list[index]
             kpt_input_list.append(copy.deepcopy(gt_input.keypoint_input))
+            classes_input_list.append(copy.deepcopy(gt_input.classes))
             if self.image_input_list[index] is None:
                 source_ref = gt_input.image.source_ref
                 image_input = ImageInput(source_ref,
@@ -78,8 +80,9 @@ class KeypointDirectoryGenerator(KerasGeneratorBase):
             augment.execute(image_input_list, kpt_input_list)
 
         if self.dataset_type == 'test':
-            return image_input_list, kpt_input_list
+            return image_input_list, kpt_input_list, classes_input_list
         else:
             batch_inputs, batch_outputs = self.processor({'image_input_list': image_input_list,
-                                                          'kpt_input_list': kpt_input_list})
+                                                          'kpt_input_list': kpt_input_list,
+                                                          'classes_input_list': classes_input_list})
             return batch_inputs, batch_outputs
