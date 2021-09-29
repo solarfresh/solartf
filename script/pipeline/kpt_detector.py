@@ -17,10 +17,10 @@ from solartf.core.loss import smooth_L1_loss
 class Config(ResNetV2Config):
 
     # train or freeze or show or partial_freeze or inference
-    STATUS = 'train'
-    # MODEL_WEIGHT_PATH = '/Users/huangshangyu/Downloads/model/kptdetector/' \
-    #                     'kptdetector-00500_loss-0.0807_val_loss-0.0901_cls_output_loss-0.0000_val_cls_output_loss-0.0000_kpt_output_loss-0.0057_val_kpt_output_loss-0.0151.h5'
-    MODEL_WEIGHT_PATH = None
+    STATUS = 'inference'
+    MODEL_WEIGHT_PATH = '/Users/huangshangyu/Downloads/model/kptdetector/' \
+                        'epoch-01130_loss-0.0840_val_loss-0.2836_cls_0_output_loss-0.0021_val_cls_0_output_loss-0.1542_cls_1_output_loss-0.0008_val_cls_1_output_loss-0.0927_kpt_output_loss-0.0811_val_kpt_output_loss-0.0366'
+    # MODEL_WEIGHT_PATH = None
     SAVE_CSV_PATH = os.path.join('/Users/huangshangyu/Downloads/model/kptdetector', 'results.csv')
     TRAIN_INITIAL_EPOCH = 0
     TRAIN_EPOCH = TRAIN_INITIAL_EPOCH + 500
@@ -77,7 +77,7 @@ class Config(ResNetV2Config):
         dropout_rate=.3
     )
     CUSTOM_OBJECTS = {
-        'MobileNetV3Small': graph.MobileNetV3Small
+        'smooth_L1_loss': smooth_L1_loss
     }
 
     TRAIN_OPTIMIZER = optimizers.Adam(learning_rate=1e-3, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=5e-04)
@@ -111,8 +111,8 @@ if __name__ == '__main__':
             fname = row['fname']
             image_array = cv2.imread(os.path.join(config.TEST_IMAGE_PATH, fname))
             image_array = cv2.resize(image_array, (row['height'], row['width']))
-            for idx in range(config.CLASS_NUMBER):
-                kpt = (row[f'cls_{idx}_kptx_pred'], row[f'cls_{idx}_kpty_pred'])
+            for idx in range(config.CLASS_NUMBER[-1]):
+                kpt = (row[f'kpt_{idx}_kptx_pred'], row[f'kpt_{idx}_kpty_pred'])
                 image_array = cv2.circle(image_array, kpt, radius=0, color=(0, 0, 255), thickness=10)
                 cv2.imshow('Prediction', image_array)
 
