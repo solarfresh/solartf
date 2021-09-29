@@ -11,20 +11,17 @@ class KeypointDetectPipeline(TFPipelineBase):
             output_shape = self.model.input_shape
 
         result_list = []
-        for image_input_list, kpt_input_list in self.dataset[dataset_type]:
+        for input_list in self.dataset[dataset_type]:
+            image_input_list, kpt_input_list, classes_input_list = input_list
             image_arrays, batch_gts = self.model.data_preprocess({'image_input_list': image_input_list,
-                                                                  'kpt_input_list': kpt_input_list})
+                                                                  'kpt_input_list': kpt_input_list,
+                                                                  'classes_input_list': classes_input_list})
             height, width, _ = self.model.input_shape
             predict_results = self.model.predict(image_arrays)
-            batch_cls_gts = batch_gts['cls']
-            batch_kpt_gts = batch_gts['kpt']
-            cls_outputs = predict_results['cls']
-            kpt_outputs = predict_results['kpt']
-            for image_input, cls_gt, kpt_gt, cls_output, kpt_output in zip(image_input_list,
-                                                                           batch_cls_gts,
-                                                                           batch_kpt_gts,
-                                                                           cls_outputs,
-                                                                           kpt_outputs):
+            output_keys = list(batch_gts.keys())
+            output_keys.remove('kpt')
+            for batch_idx in range(len(image_input_list)):
+                image_input = image_input_list[batch_idx]
 
                 result = {
                     'fname': os.path.basename(image_input.image_path),
@@ -32,20 +29,26 @@ class KeypointDetectPipeline(TFPipelineBase):
                     'height': output_shape[0]
                 }
 
+                kpt_gt = batch_gts['kpt'][batch_idx]
+                kpt_output = predict_results['kpt'][batch_idx]
                 kpt_gt[..., 0] = kpt_gt[..., 0] * output_shape[1]
                 kpt_gt[..., 1] = kpt_gt[..., 1] * output_shape[0]
                 kpt_output[..., 0] = kpt_output[..., 0] * output_shape[1]
                 kpt_output[..., 1] = kpt_output[..., 1] * output_shape[0]
                 kpt_gt = kpt_gt.astype(np.int32)
                 kpt_output = kpt_output.astype(np.int32)
-                for idx in range(self.model.n_classes):
-                    result.update({f'cls_{idx}_gt': cls_gt[idx]})
-                    result.update({f'cls_{idx}_pred': cls_output[idx]})
+                for attr_name in output_keys[:-1]:
+                    result.update({f'{attr_name}_gt': batch_gts[attr_name][batch_idx]})
+                    result.update({f'{attr_name}_pred': predict_results[attr_name][batch_idx]})
 
-                    result.update({f'cls_{idx}_kptx_gt': kpt_gt[idx, 0]})
-                    result.update({f'cls_{idx}_kpty_gt': kpt_gt[idx, 1]})
-                    result.update({f'cls_{idx}_kptx_pred': kpt_output[idx, 0]})
-                    result.update({f'cls_{idx}_kpty_pred': kpt_output[idx, 1]})
+                for idx in range(self.model.n_classes[-1]):
+                    result.update({f'kpt_{idx}_vis_gt': batch_gts[output_keys[-1]][batch_idx][idx]})
+                    result.update({f'kpt_{idx}_vis_pred': predict_results[output_keys[-1]][batch_idx][idx]})
+
+                    result.update({f'kpt_{idx}_kptx_gt': kpt_gt[idx, 0]})
+                    result.update({f'kpt_{idx}_kpty_gt': kpt_gt[idx, 1]})
+                    result.update({f'kpt_{idx}_kptx_pred': kpt_output[idx, 0]})
+                    result.update({f'kpt_{idx}_kpty_pred': kpt_output[idx, 1]})
 
                 result_list.append(result)
 
