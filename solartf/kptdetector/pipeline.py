@@ -38,8 +38,12 @@ class KeypointDetectPipeline(TFPipelineBase):
                 kpt_gt = kpt_gt.astype(np.int32)
                 kpt_output = kpt_output.astype(np.int32)
                 for attr_name in output_keys[:-1]:
-                    result.update({f'{attr_name}_gt': batch_gts[attr_name][batch_idx]})
-                    result.update({f'{attr_name}_pred': predict_results[attr_name][batch_idx]})
+                    idx = 0
+                    for attr_name_gt, attr_name_pred in zip(batch_gts[attr_name][batch_idx],
+                                                            predict_results[attr_name][batch_idx]):
+                        result.update({f'{attr_name}_{idx}_gt': attr_name_gt})
+                        result.update({f'{attr_name}_{idx}_pred': attr_name_pred})
+                        idx += 1
 
                 for idx in range(self.model.n_classes[-1]):
                     result.update({f'kpt_{idx}_vis_gt': batch_gts[output_keys[-1]][batch_idx][idx]})
